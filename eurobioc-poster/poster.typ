@@ -19,7 +19,7 @@
 #let codefg    = rgb("#9be29b")
 
 // --- page ------------------------------------------------------------------
-#set page(width: 841mm, height: 1189mm, margin: 24mm)
+#set page(width: 841mm, height: 1189mm, margin: 12mm)
 #set text(font: "Arial", size: 32pt, fill: ink, lang: "en")
 #set par(leading: 0.6em, justify: false)
 #show link: set text(fill: navy)
@@ -59,7 +59,7 @@
     [
       #set align(center)
       #text(size: 82pt, weight: "bold", fill: white)[
-        anvl: accelerated array computation for R
+        Accelerated array computing and code transformations for R
       ]
       #v(12pt)
       #text(size: 36pt, fill: white)[
