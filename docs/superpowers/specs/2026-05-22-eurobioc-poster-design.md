@@ -14,8 +14,7 @@ the "three code transformations" diagram).
 ## Format & tooling
 
 - **Size/orientation:** A0 portrait (841 × 1189 mm).
-- **Engine:** Typst. Not currently installed — implementation begins with
-  `brew install typst` (ask the user before running).
+- **Engine:** Typst.
 - **Fonts (accessibility spec):** Arial (present at
   `/System/Library/Fonts/Supplemental/Arial.ttf`).
   - Poster title: Arial 82 pt Bold (60 pt minimum), 12 pt space after.
@@ -35,18 +34,18 @@ the "three code transformations" diagram).
 Banded layout — mostly full-width stacked bands for an accessible top-to-bottom
 read, with one two-column row. Top to bottom:
 
-1. **Header** — navy block.
+1. **Header** — navy block. The anvl hexagon logo sits at the left, the title
+   block (title + authors) is centered in the remaining width.
    - Title: *"anvl: accelerated array computation for R"*.
    - Authors: Sebastian Fischer¹, Daniel Falbel, Martin Binder¹, Bernd Bischl¹.
    - Affiliation: ¹LMU Munich, Munich Center for Machine Learning (MCML).
      Daniel Falbel has no affiliation. Bischl is last (senior author).
 
-2. **Motivation & why anvl** — full-width light band.
-   JAX-like array computing in plain R; compiled via the OpenXLA stack (also
-   behind TensorFlow / PyTorch-XLA); GPU acceleration without leaving R;
-   simplified CUDA install (only an NVIDIA driver required); primarily written
-   in R, so easy to extend and contribute to; key difference from `{torch}` is
-   JIT compilation.
+2. **Motivation** — full-width light band. The core pitch only: anvl brings
+   compiled, GPU-accelerated array computing to the R community; write array
+   programs in plain R, compiled under the hood via the OpenXLA stack (also
+   behind JAX, TensorFlow, PyTorch-XLA); anvl aspires to be for R what JAX is
+   for Python. (The "why anvl" advantages live in section 4, not here.)
 
 3. **Capability row** — two equal columns, each with a short code snippet:
    - **① Execution: eager & JIT** — Eager mode (default): each operation runs
@@ -62,6 +61,10 @@ read, with one two-column row. Top to bottom:
      JIT-able control flow (`nv_while`).
    - *Build, in plain R* — neural networks, matrix factorizations, custom
      optimizers, gradient-based estimators, Monte Carlo samplers.
+   - **"Why anvl"** line (the advantages, moved here from Motivation): GPU
+     acceleration without leaving R; simplified CUDA install (just a driver);
+     JIT compilation sets it apart from `{torch}`; written in R, so easy to
+     extend and contribute to.
    - Highlighted **scope caveat** line: anvl currently targets **dense** arrays;
      sparse matrices are not well supported yet. Best fit: dense data, regular
      shapes, repeated/batched computation.
@@ -86,8 +89,10 @@ read, with one two-column row. Top to bottom:
    - Links: `github.com/r-xla/anvl`, `r-xla.github.io/anvl`.
    - QR code encodes `https://github.com/r-xla/anvl`.
 
-8. **Footer** — slim navy block. Acknowledgment: "Supported by MaRDI — the
-   Mathematical Research Data Initiative (NFDI, DFG grant 460135501)."
+8. **Footer** — slim navy block. The MaRDI logo sits at the left on a small
+   white panel (so the logo's blue "M" stays legible against navy), followed by
+   the acknowledgment: "Supported by MaRDI — the Mathematical Research Data
+   Initiative (NFDI, DFG grant 460135501)."
 
 ## Assets
 
@@ -95,6 +100,10 @@ read, with one two-column row. Top to bottom:
 - `eurobioc-poster/abstract.md` — already created; the submitted abstract.
 - `eurobioc-poster/assets/three-transformations.svg` — copied from `talks/`.
   Embedded via Typst `image()`.
+- `eurobioc-poster/assets/anvl-logo.svg` — copied from
+  `~/r-xla/anvl/man/figures/logo.svg`. Placed in the header.
+- `eurobioc-poster/assets/mardi-logo.png` — copied from
+  `~/Downloads/mardi-logo.png`. Placed in the footer on a white panel.
 - Placeholder benchmark figure — drawn natively in Typst (a bordered box
   labelled e.g. "Benchmark figure — data pending") so no external image file is
   needed; replaced with a real figure/image later.
