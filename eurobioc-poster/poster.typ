@@ -1,5 +1,12 @@
-// EuroBioC poster for the anvl R package — A0 portrait, Typst.
-// See ../docs/superpowers/specs/2026-05-22-eurobioc-poster-design.md
+// ===========================================================================
+// EuroBioC poster (Typst)
+//
+// The randomized-SVD benchmark figure (figures/benchmark.png) is produced
+// by benchmark.R. Regenerate with: Rscript benchmark.R
+// ===========================================================================
+
+#set page(paper: "a0", margin: 12mm, numbering: none)
+#set text(font: "Arial", size: 32pt)
 
 #import "@preview/tiaoma:0.3.0": qrcode
 #import "@preview/fletcher:0.5.8" as fletcher: diagram, node, edge
@@ -13,74 +20,66 @@
 #let blueline  = rgb("#b9cbdc")
 #let amberfill = rgb("#fdf2e0")
 #let amberline = rgb("#e8c98a")
+#let codebg    = rgb("#2b2b3a")
+#let codefg    = rgb("#9be29b")
+#let goodfill  = rgb("#e8f4ea")
+#let goodline  = rgb("#a9ccaf")
+#let goodink   = rgb("#2f6b3a")
 #let warnfill  = rgb("#fbe9e7")
 #let warnline  = rgb("#e0a89c")
 #let warnink   = rgb("#9c3a28")
-#let codebg    = rgb("#2b2b3a")
-#let codefg    = rgb("#9be29b")
 
-// --- page ------------------------------------------------------------------
-#set page(width: 841mm, height: 1189mm, margin: 12mm)
-#set text(font: "Arial", size: 32pt, fill: ink, lang: "en")
 #set par(leading: 0.6em, justify: false)
 #show link: set text(fill: navy)
 
 // --- helpers ---------------------------------------------------------------
-#let sec(title) = text(size: 42pt, weight: "bold", fill: navy)[#title]
+#let sec(title) = block(below: 22pt, above: 0pt, text(size: 42pt, weight: "bold", fill: navy)[#title])
 
 #let band(body, fill: lightfill, line: lightline) = block(
-  width: 100%, fill: fill, stroke: 1.5pt + line, radius: 8pt, inset: 7pt,
+  width: 100%, fill: fill, stroke: 1.5pt + line, radius: 8pt,
+  inset: (x: 7pt, y: 12pt),
 )[#body]
 
 #let codebox(code) = block(
   width: 100%, fill: codebg, radius: 6pt, inset: 8pt,
-  text(font: "JetBrains Mono", size: 23pt, fill: codefg, raw(code, lang: "r")),
+  text(font: "JetBrains Mono", size: 36pt, fill: codefg, raw(code, lang: "r")),
 )
 
-#let chip(body) = box(
-  fill: warnfill, stroke: 1.5pt + warnline, radius: 6pt, inset: 10pt,
-  text(size: 26pt, fill: warnink)[#body],
-)
-
-// compact code box (R input) for the How-it-works steps
 #let codesm(code) = block(
   width: 100%, fill: codebg, radius: 5pt, inset: 7pt,
-  text(font: "JetBrains Mono", size: 16pt, fill: codefg, raw(code, lang: "r")),
+  text(font: "JetBrains Mono", size: 26pt, fill: codefg, raw(code, lang: "r")),
 )
 
-// console-output box for the How-it-works steps
 #let outbox(txt) = block(
   width: 100%, fill: white, stroke: 1pt + blueline, radius: 5pt, inset: 7pt,
-  text(font: "JetBrains Mono", size: 16pt, fill: ink, raw(txt)),
+  {
+    set par(leading: 0.35em)
+    text(font: "JetBrains Mono", size: 26pt, fill: ink, raw(txt))
+  },
 )
 
-// stack of bands with consistent vertical rhythm
-#let gap = v(2pt, weak: true)
-
-// inline bullet separator
+#let gap = v(14pt, weak: true)
 #let dot = [#h(0.55em) · #h(0.55em)]
 
 // ===========================================================================
 // HEADER
 // ===========================================================================
-#block(
-  width: 100%, fill: navy, radius: 8pt, inset: 7pt,
-)[
+#block(width: 100%, fill: navy, radius: 8pt, inset: (x: 5pt, y: 15pt))[
   #grid(
     columns: (auto, 1fr), align: horizon, gutter: 30pt,
-    image("assets/anvl-logo.svg", height: 130pt),
+    image("assets/anvl-logo.svg", height: 180pt),
     [
       #set align(center)
-      #text(size: 82pt, weight: "bold", fill: white)[
+      #text(size: 70pt, weight: "bold", fill: white, top-edge: "cap-height", bottom-edge: "baseline")[
         Accelerated array computing and code transformations for R
       ]
-      #v(4pt)
+      #v(12pt)
       #text(size: 36pt, fill: white)[
-        Sebastian Fischer#super[1] · Daniel Falbel · Martin Binder#super[1] · Bernd Bischl#super[1]
+        Sebastian Fischer#super[1,2] · Daniel Falbel · Tomasz Kalinowski#super[3] · Niko German · Martin Binder#super[1,2] · Bernd Bischl#super[1,2]
       ]
       #v(3pt)
-      #text(size: 32pt, fill: rgb("#cdd9e6"))[
-        #super[1]LMU Munich, Munich Center for Machine Learning (MCML)
+      #text(size: 36pt, fill: rgb("#cdd9e6"))[
+        #super[1]LMU Munich #h(0.8em) #super[2]Munich Center for Machine Learning (MCML) #h(0.8em) #super[3]Posit
       ]
     ],
   )
@@ -89,180 +88,191 @@
 #gap
 
 // ===========================================================================
-// MOTIVATION
-// ===========================================================================
-#band[
-  #sec[Motivation]
-  #v(6pt)
-  *anvl* brings *compiled, GPU-accelerated array computing* to the R community:
-  you write array programs in plain R, which anvl compiles to optimized machine
-  code via the *OpenXLA* compiler stack — the same infrastructure behind JAX,
-  TensorFlow, and PyTorch/XLA. anvl aspires to be for R what JAX is for Python.
-]
-
-#gap
-
-// ===========================================================================
-// CAPABILITY ROW — eager & JIT  |  automatic differentiation
+// MOTIVATION + SHARED SETUP (side by side)
 // ===========================================================================
 #grid(
-  columns: (1fr, 1fr), gutter: 20pt,
+  columns: (1fr, 1fr), gutter: 20pt, align: top,
   band[
-    #sec[① Execution: eager & JIT]
-    #v(8pt)
-    Running example — a *linear-model forward pass*:
-    #v(6pt)
-    #codebox("predict <- function(X, beta) X %*% beta")
-    #v(5pt)
-    *Eager mode* (default): each operation is dispatched and run immediately,
-    optimized in isolation — ideal for interactive use and debugging.
-
-    #v(6pt)
-    *JIT mode*: `jit()` traces the whole function into a computational graph,
-    which the XLA compiler optimizes as a single unit — fusing operations,
-    eliminating redundant buffers, and specializing to the actual shapes and
-    dtypes — before emitting one cached executable.
-    #v(5pt)
-    #codebox("y_hat <- predict(X, beta)  # eager: runs now
-fast  <- jit(predict)      # trace + compile
-y_hat <- fast(X, beta)     # cached executable")
+    #sec[Motivation]
+    *anvl* brings *compiled, GPU-accelerated array computing* to R:
+    you write numerical programs in plain R, which anvl compiles to optimized
+    machine code via *OpenXLA* — the compiler stack underpinning
+    frameworks like TensorFlow, JAX or PyTorch (TPU). anvl aspires to be for
+    R what JAX is for Python.
+    Unlike eager-first frameworks such as *torch*, anvl focuses on compilation,
+    which means it requires fewer hand-written CUDA kernels without sacrificing
+    performance.
   ],
   band[
-    #sec[② Automatic differentiation]
-    #v(8pt)
-    `gradient()` returns a new function that computes *reverse-mode gradients*
-    of a plain R function — no derivations by hand, and it composes with
-    `jit()`. Here we fit the linear model above by minimizing its *mean
-    squared error*:
-    #v(5pt)
-    #codebox("loss <- function(X, y, beta) mean((X %*% beta - y)^2)
-
-grad <- gradient(loss, wrt = \"beta\")
-g    <- grad(X, y, beta)   # gradient w.r.t. beta")
+    Create `AnvlArray`s from R objects with `nv_array()` — the `device` argument picks the hardware. Default `dtype` is `f32` and device `"cpu"`.
+    #v(6pt)
+    #codebox("X     <- nv_array(rnorm(N * P), shape = c(N, P), dtype = \"f32\")
+beta  <- nv_array(rnorm(P), shape = c(P, 1), device = \"cpu\")
+alpha <- nv_scalar(rnorm(1))
+y     <- nv_array(rnorm(N), shape = c(N, 1))")
   ],
 )
 
 #gap
 
 // ===========================================================================
-// WHAT ANVL CAN DO
+// CAPABILITY ROW
+// ===========================================================================
+#grid(
+  columns: (1fr, 1fr, 1fr), gutter: 20pt, align: top,
+  band[
+    #sec[① Eager mode]
+    Each operation (`%*%`, `+`) is *dispatched and run immediately*.
+    Primarily intended for interactive use and debugging.
+    #v(6pt)
+    #codebox("linear <- function(X, beta, alpha)
+  X %*% beta + alpha
+y_hat <- linear(X, beta, alpha)")
+  ],
+  band[
+    #sec[② JIT mode]
+    `jit()` *compiles the whole function as a single unit*, allowing for joint optimizations like
+    kernel fusion or buffer reuse. Shapes and data types are specialized and subsequent
+    calls with the same input shapes and dtypes use the cached executable.
+    #v(6pt)
+    #codebox("fast  <- jit(linear)
+y_hat <- fast(X, beta, alpha)")
+  ],
+  band[
+    #sec[③ Automatic differentiation]
+    `gradient()` returns a new function that computes *reverse-mode
+    gradients* of an R function. This is currently the only example of a semantic code transformation.
+    #v(6pt)
+    #codebox("loss <- function(X, y, beta, alpha)
+  mean((linear(X, beta, alpha) - y)^2)
+grad <- jit(gradient(loss, wrt = \"beta\"))
+g    <- grad(X, y, beta, alpha)")
+  ],
+)
+
+#gap
+
+// ===========================================================================
+// WHY ANVL
 // ===========================================================================
 #band[
-  #sec[What anvl can do]
-  #v(6pt)
+  #sec[Why anvl?]
   #grid(
-    columns: (1fr, 1fr), gutter: 30pt,
+    columns: (1fr, 1fr), gutter: 24pt, align: top,
     [
-      *≈ 140 array operations.* Construction, arithmetic, linear algebra
-      (`nv_matmul`, `nv_qr`, `nv_svd`, `nv_chol`, `nv_solve`), reductions and
-      statistics, random-number generation, and JIT-able control flow
-      (`nv_while`).
+      - same code runs on CPU and GPU
+      - a more consistent array API than base R
+      - simplified CUDA install (only an NVIDIA driver needed)
+      - JIT compilation sets it apart from *torch*
+      - written primarily in R, so easy to extend and contribute to
+      - around 140 common functions already covered and more coming
+      - possible use-cases: gradient-based methods, Monte Carlo samplers, expensive matrix algebra, etc.
+      - separates the *what* from the *how*: an alternative, experimental *quickr* backend transpiles to Fortran instead.
     ],
     [
-      *Build, in plain R.* Neural networks, matrix factorizations, custom
-      optimizers, gradient-based estimators, and Monte Carlo samplers — all
-      expressed directly in R and run on CPU or GPU.
+        #box(width: 100%, fill: goodfill, stroke: 1.5pt + goodline,
+            radius: 6pt, inset: 12pt)[
+          #text(size: 32pt, weight: "bold", fill: goodink)[✓ Fast when]
+          #v(3pt)
+          #text(size: 32pt)[
+            - The compilation overhead is amortized, either because:
+              - the function is called repeatedly with the same shapes and data types (can be enforced via padding)
+              - a single function call is substantial
+            - The work involves dense arrays
+          ]
+        ]
+        #v(8pt)
+        #box(width: 100%, fill: warnfill, stroke: 1.5pt + warnline,
+            radius: 6pt, inset: 12pt)[
+          #text(size: 32pt, weight: "bold", fill: warnink)[✗ Not great (yet) when]
+          #v(3pt)
+          #text(size: 32pt)[
+            - Data-dependent shape computations cannot be part of a compiled function
+            - The data is sparse
+          ]
+        ]
     ],
   )
-  #v(6pt)
-  #block(stroke: (top: 1.5pt + lightline), inset: (top: 10pt), width: 100%)[
-    *Why anvl?* #h(0.4em) GPU acceleration without leaving R #dot
-    a more intuitive and consistent array-computing API than base R #dot
-    simplified CUDA install (only an NVIDIA driver needed) #dot
-    JIT compilation sets it apart from *{torch}* #dot
-    written primarily in R, so easy to extend and contribute to.
-  ]
-  #v(6pt)
-  #chip[
-    *⚠ Scope:* anvl currently targets *dense* arrays — sparse matrices are not
-    well supported yet. Best fit: dense data, regular shapes, and repeated or
-    batched computation.
-  ]
 ]
 
 #gap
 
 // ===========================================================================
-// HOW IT WORKS — three code transformations, demoed on a tiny function
+// HOW IT WORKS
 // ===========================================================================
 #band(fill: bluefill, line: blueline)[
   #grid(
     columns: (1.35fr, 1fr), align: horizon, gutter: 30pt,
     [
       #sec[How it works]
-      #v(6pt)
-      #text(size: 30pt)[
-        anvl compiles your code through *three code transformations*. Below we
-        follow them on a tiny example function — `f <- function(x, y) x * y + 1`
-        — calling each transformation directly and showing its output.
+      #text(size: 32pt)[
+        anvl pipes your code through three types of *code transformations*, shown
+        below on the tiny example `f <- function(x) x * 2` — each
+        transformation called directly, with its output.
       ]
     ],
     align(center, text(size: 24pt)[#diagram(
       node-stroke: 1.5pt + navy,
       edge-stroke: 1.4pt + navy,
-      spacing: (2.7cm, 1.95cm),
-      node((0, 0), [R code], fill: white, corner-radius: 4pt, inset: 10pt),
-      node((1, 0), [AnvlGraph\ (IR)], fill: bluefill, corner-radius: 4pt, inset: 10pt),
-      node((2, 0), [Executable], fill: white, corner-radius: 4pt, inset: 10pt),
+      spacing: (2.45cm, 1.78cm),
+      node((0, 0), [R code], fill: white, corner-radius: 4pt, inset: 8pt),
+      node((1, 0), [AnvlGraph\ (IR)], fill: bluefill, corner-radius: 4pt, inset: 8pt),
+      node((2, 0), [Executable], fill: white, corner-radius: 4pt, inset: 8pt),
       edge((0, 0), (1, 0), "->", [trace]),
       edge((1, 0), (2, 0), "->", [lower]),
       edge((1, 0), (1, 0), "->", [transform], bend: 130deg),
     )]),
   )
   #v(6pt)
-  #let step(num, title, sub, call, out) = box(
+  #let step(num, title, sub, desc, call, out) = block(
     width: 100%, fill: white, stroke: 1.5pt + blueline, radius: 6pt, inset: 9pt,
   )[
-    #text(size: 30pt, weight: "bold", fill: navy)[#num #h(6pt) #title]
+    #text(size: 32pt, weight: "bold", fill: navy)[#num #h(6pt) #title]
     #h(1fr)
-    #text(size: 22pt, fill: rgb("#5a6b7d"))[#sub]
+    #text(size: 24pt, fill: rgb("#5a6b7d"))[#sub]
+    #v(5pt)
+    #text(size: 32pt)[#desc]
     #v(7pt)
     #codesm(call)
     #v(6pt)
     #outbox(out)
   ]
   #grid(
-    columns: (1fr, 1fr, 1fr), gutter: 16pt, align: top,
+    columns: (1fr, 1fr, 1.25fr), rows: auto, gutter: 12pt,
     step("①", "Trace", "R → AnvlGraph",
+      [Run the function on abstract inputs and record primitive operations.],
       "trace_fn(f, args = list(
-  x = nv_aval(\"f32\", integer()),
-  y = nv_aval(\"f32\", integer())))",
+  x = nv_aval(\"f32\", integer())))",
       "<AnvlGraph>
   Inputs:
     %x1: f32[]
-    %x2: f32[]
   Body:
-    %1: f32[] = mul(%x1, %x2)
-    %2: f32[] = add(%1, 1:f32?)
+    %1: f32[] = mul(%x1, 2:f32?)
   Outputs:
-    %2: f32[]"),
-    step("②", "Transform", "graph → graph",
-      "transform_gradient(
-  graph, wrt = c(\"x\", \"y\"))",
+    %1: f32[]"),
+    step("②", "Transform", "AnvlGraph → AnvlGraph",
+      [Rewrite the graph, e.g. to compute its gradient.],
+      "transform_gradient(graph, wrt = \"x\")",
       "<AnvlGraph>
   Inputs:
-    %x1: f32[]   %x2: f32[]
+    %x1: f32[]
   Constants:
     %c1: f32[]
   Body:
-    %1 = mul(%x1, %x2)
-    %2 = add(%1, 1:f32?)
-    %3 = mul(%c1, %x2)
-    %4 = mul(%c1, %x1)
+    %1 = mul(%x1, 2:f32?)
+    %2 = mul(%c1, 2:f32?)
   Outputs:
-    %3: f32[]   %4: f32[]"),
-    step("③", "Lower", "graph → executable",
-      "stablehlo(graph)[[1]]",
-      "func.func @main
-   (%0: tensor<f32>,
-    %1: tensor<f32>) -> tensor<f32> {
- %2 = stablehlo.multiply %0, %1
-        : tensor<f32>
- %3 = stablehlo.constant
-        dense<1.0e0> : tensor<f32>
- %4 = stablehlo.add %2, %3
-        : tensor<f32>
- return %4 : tensor<f32>
+    %2: f32[]"),
+    step("③", "Lower", "AnvlGraph → Executable",
+      [Compile the graph into a hardware-specific executable.
+       Built on the *pjrt* and *stablehlo* packages, which are part of r-xla.],
+      "hlo <- stablehlo(graph)[[1]]
+exe <- pjrt_compile(pjrt_program(repr(hlo)))
+print(hlo)",
+      "func.func @main(%0: tensor<f32>) -> tensor<f32> {
+  %1 = stablehlo.constant dense<2.0e0> : tensor<f32>
+  %2 = stablehlo.multiply %0, %1 : tensor<f32>
+  return %2 : tensor<f32>
 }"),
   )
 ]
@@ -273,94 +283,65 @@ g    <- grad(X, y, beta)   # gradient w.r.t. beta")
 // APPLICATION — randomized SVD
 // ===========================================================================
 #band(fill: amberfill, line: amberline)[
-  #sec[★ Application: randomized SVD for bioinformatics]
-  #v(6pt)
+  #sec[Application: randomized SVD]
+  For $A in RR^(n times p)$ with $n,p$ large but only the top $k << min(n,p)$
+  singular triplets needed, the randomized SVD (Halko et al., 2011)
+  approximates them in four steps: sample
+  $Omega in RR^(p times k) tilde cal(N)(0,1)$;
+  sketch $Y = A Omega in RR^(n times k)$;
+  orthonormalize $Q R = Y$;
+  and SVD the small matrix
+  $B = Q^T A = tilde(U) Sigma V^T$. Then
+  $A approx Q tilde(U) Sigma V^T$, giving the approximate top-$k$ triplets
+  $(Sigma, Q tilde(U), V^T)$. 
+  #v(8pt)
   #grid(
-    columns: (1.05fr, 1fr), gutter: 30pt,
+    columns: (1fr, 1fr), gutter: 30pt, align: top,
     [
-      Randomized SVD approximates the top-#emph[k] singular triplets of a large
-      matrix by sketching it onto a low-dimensional subspace with a random
-      Gaussian matrix $Omega$, then taking an exact SVD of the small projection.
-      It is a matmul-heavy, dense workload — XLA's sweet spot — so `jit()`-ing
-      it on a GPU scales these decompositions to larger data.
-      #v(8pt)
-      #codebox("rsvd <- jit(function(A, Omega) {
-  Q <- nv_qr(nv_matmul(A, Omega))$Q   # sketch + orthonormalize
-  B <- nv_matmul(nv_transpose(Q), A)  # project (small)
-  s <- nv_svd(B)                      # exact SVD of B
-  list(d = s$d, u = nv_matmul(Q, s$u), vt = s$vt)
-})")
-    ],
-    [
-      #set align(center + horizon)
-      #block(
-        width: 100%, height: 80pt, fill: white,
-        stroke: (paint: amberline, thickness: 2pt, dash: "dashed"),
-        radius: 6pt, inset: 16pt,
-      )[
-        #text(size: 32pt, weight: "bold", fill: navy)[Benchmark figure]
-        #v(8pt)
-        #text(size: 28pt, fill: rgb("#888888"))[
-          Placeholder — runtime of randomized SVD\
-          (base R vs. anvl CPU vs. anvl GPU)\
-          to be added once data is available.
-        ]
+      #codebox("k <- 200L
+rsvd <- jit(function(A, key, k) {
+  Omega <- nv_rnorm(c(ncol(A), k), key)[[2]]
+  Q <- nv_qr(A %*% Omega)$Q
+  B <- t(Q) %*% A
+  s <- nv_svd(B)
+  list(d = s$d, u = Q %*% s$u, vt = s$vt)
+}, static = \"k\")")
+      #v(4pt)
+      #text(size: 24pt, fill: rgb("#5a6b7d"))[
+        Based on Gundersen (2019),
+        #link("https://gregorygundersen.com/blog/2019/01/17/randomized-svd/")[gregorygundersen.com/blog/2019/01/17/randomized-svd].
       ]
     ],
-  )
-  #v(6pt)
-  #chip[
-    *⚠ For Bioconductor users:* sparse single-cell / genomics matrices would
-    need to be densified first.
-  ]
-]
-
-#gap
-
-// ===========================================================================
-// GETTING STARTED
-// ===========================================================================
-#band[
-  #grid(
-    columns: (1fr, auto), align: horizon, gutter: 30pt,
     [
-      #sec[Getting started]
-      #v(6pt)
-      *Install* from r-universe — CPU works out of the box; NVIDIA GPU support
-      is added via the `cuda12.8` package.
-      #v(6pt)
-      *Runs on:* CPU — Linux, Windows, Apple Silicon #dot
-      NVIDIA GPU — Linux x86-64.
-      #v(6pt)
-      *Status:* early-stage, not yet on CRAN — feedback and contributions
-      welcome.
-      #v(6pt)
-      #text(weight: "bold")[
-        #link("https://github.com/r-xla/anvl")[github.com/r-xla/anvl]
-        #h(28pt)
-        #link("https://r-xla.github.io/anvl")[r-xla.github.io/anvl]
+      // Benchmark figure generated by the R chunk above. anvl CPU and base R
+      // are real numbers from this machine; GPU bar is a TODO placeholder.
+      #box(width: 100%, fill: white, stroke: 1.5pt + amberline,
+           radius: 6pt, inset: 8pt)[
+        #image("figures/benchmark.png", width: 90%, height: 420pt, fit: "contain")
       ]
     ],
-    box(fill: white, stroke: 1.5pt + lightline, radius: 6pt, inset: 14pt,
-      qrcode("https://github.com/r-xla/anvl", options: (scale: 6.0))),
   )
 ]
 
 #gap
 
 // ===========================================================================
-// FOOTER
+// FOOTER — MaRDI + repo QR
 // ===========================================================================
-#block(
-  width: 100%, fill: navy, radius: 8pt, inset: 7pt,
-)[
+#block(width: 100%, fill: navy, radius: 8pt, inset: 5pt)[
   #grid(
-    columns: (auto, 1fr), align: horizon, gutter: 26pt,
+    columns: (auto, 1fr, auto), align: horizon, gutter: 26pt,
     box(fill: white, radius: 6pt, inset: 12pt,
       image("assets/mardi-logo.png", height: 90pt)),
-    text(size: 28pt, fill: rgb("#cdd9e6"))[
+    text(size: 32pt, fill: rgb("#cdd9e6"))[
       Supported by *MaRDI* — the Mathematical Research Data Initiative, an NFDI
       project funded by DFG grant 460135501.
+      #v(4pt)
+      #text(fill: white, weight: "bold")[
+        #link("https://github.com/r-xla/anvl")[github.com/r-xla/anvl]
+      ]
     ],
+    box(fill: white, radius: 6pt, inset: 6pt,
+      qrcode("https://github.com/r-xla/anvl", options: (scale: 2.8))),
   )
 ]
