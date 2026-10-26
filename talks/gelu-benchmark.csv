@@ -1,0 +1,4 @@
+"implementation","ms_per_call","n","reps"
+"torch_composed",310.85,1e+07,20
+"torch_builtin",443.35,1e+07,20
+"anvl_jit",77.45,1e+07,20
