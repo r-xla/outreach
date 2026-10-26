@@ -1,0 +1,157 @@
+---
+title: "R Framework for Fast and Interoperable Array Computing"
+date: "2025-10-28"
+author: "Sebastian Fischer, Daniel Falbel, Niko German, Bernd Bischl"
+format:
+  revealjs
+---
+
+## Motivation
+
+- Many models (ML, Bayesian, ...) or other scientific programs are operating on arrays.
+- In order to implement algorithms efficiently, the (rather slow) R interpreter can be an issue for performance:<br>$\rightarrow$ We want to stage the computation out of R.
+- Google develops OpenXLA (Accelerated Linear Algebra), which is a compiler framework aimed at enabling interoperation between frontend frameworks and hardware implementations.
+  <br>$\rightarrow$ Our goal: Create a **fast** and **interoperable** array framework for R built upon OpenXLA.
+
+
+## OpenXLA Architecture
+
+```{mermaid}
+%%{init: { "flowchart": { "diagramPadding": 16 }, "themeVariables": { "fontSize": "24px" } }}%%
+%%| overflow: visible
+%%| fig-width: 14
+flowchart LR
+    subgraph Frontend["Frontend Frameworks"]
+        Anvil["anvil<br>(ours)"]
+        JAX["JAX"]
+        TF["TensorFlow"]
+        PyTorch["PyTorch"]
+        GoMLX["GoMLX"]
+        ZML["ZML"]
+    end
+
+    subgraph OpenXLA["OpenXLA Compiler<br>Infrastructure"]
+        HLO["StableHLO<br/>(IR)"]
+        XLA["XLA Compiler<br/>(Optimizations)"]
+    end
+
+    subgraph Runtime["PJRT Runtime Layer"]
+        PJRT["PJRT API<br/>(Plugin Runtime Interface)"]
+    end
+
+    subgraph Backends["Hardware Backends"]
+        CPU["CPU Plugin"]
+        GPU["CUDA Plugin"]
+        TPU["Metal Plugin"]
+    end
+
+    JAX -->|"Program"| HLO
+    TF -->|"Program"| HLO
+    PyTorch -->|"Program"| HLO
+    Anvil -->|"Program"| HLO
+    ZML -->|"Program"| HLO
+    GoMLX -->|"Program"| HLO
+
+    HLO -->|"Lower"| XLA
+    XLA -->|"Compile"| PJRT
+
+    PJRT -->|"Execute"| CPU
+    PJRT -->|"Execute"| GPU
+    PJRT -->|"Execute"| TPU
+
+    %% Subgraph container styling (blue boxes with blue text and transparency)
+    style Frontend fill:#3b82f633,stroke:#3b82f6,stroke-width:3px,color:#3b82f6,font-size:24px
+    style OpenXLA fill:#3b82f633,stroke:#3b82f6,stroke-width:3px,color:#3b82f6,font-size:24px
+    style Runtime fill:#3b82f633,stroke:#3b82f6,stroke-width:3px,color:#3b82f6,font-size:24px
+    style Backends fill:#3b82f633,stroke:#3b82f6,stroke-width:3px,color:#3b82f6,font-size:24px
+
+    %% Orange color scheme for nodes
+    style JAX fill:#ff8c00,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style TF fill:#ff8c00,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style PyTorch fill:#ff8c00,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style GoMLX fill:#ff8c00,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style ZML fill:#ff8c00,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style Anvil fill:#ff6600,stroke:#333,stroke-width:3px,color:#fff,font-size:22px
+
+    style HLO fill:#ffa500,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style XLA fill:#ffa500,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+
+    style PJRT fill:#ffb347,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+
+    style CPU fill:#ff7f50,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style GPU fill:#ff7f50,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+    style TPU fill:#ff7f50,stroke:#333,stroke-width:2px,color:#fff,font-size:22px
+```
+
+## A stableHLO Program in the Wild
+
+Numerical programs can be created in framework A, exported to stableHLO, and run in another framework B.
+
+
+```mlir
+func.func @main(
+  %image: tensor<28x28xf32>,
+  %weights: tensor<784x10xf32>,
+  %bias: tensor<1x10xf32>
+) -> tensor<1x10xf32> {
+  %0 = "stablehlo.reshape"(%image) : (tensor<28x28xf32>) -> tensor<1x784xf32>
+  %1 = "stablehlo.dot"(%0, %weights) : (tensor<1x784xf32>, tensor<784x10xf32>) -> tensor<1x10xf32>
+  %2 = "stablehlo.add"(%1, %bias) : (tensor<1x10xf32>, tensor<1x10xf32>) -> tensor<1x10xf32>
+  %3 = "stablehlo.constant"() {value = dense<0.0> : tensor<1x10xf32>} : () -> tensor<1x10xf32>
+  %4 = "stablehlo.maximum"(%2, %3) : (tensor<1x10xf32>, tensor<1x10xf32>) -> tensor<1x10xf32>
+  "func.return"(%4): (tensor<1x10xf32>) -> ()
+}
+```
+
+
+## Toy Example
+
+:::: columns
+::: {.column width="50%"}
+
+- We can write functions in R and wrap them in a `jit()` call.
+- Once this function is called on new data, it will be jit-compiled and executed.
+- Automatic differentiation is also supported.
+
+:::
+
+::: {.column width="50%"}
+
+```r
+library(anvil)
+f <- function(a, b, x) {
+  a * x + b
+}
+f_jit <- jit(f)
+
+a <- nv_scalar(1.0)
+b <- nv_scalar(-2.0)
+x <- nv_scalar(3.0)
+
+f_jit(a, b, x)
+#> AnvilTensor
+#>  1.0000
+#> [ CPUf32{} ]
+```
+:::
+::::
+
+
+## Next Steps
+
+1. Finalize an MVP and release it.
+2. Push for user adoption and collect early feedback.
+3. Adapt development of project based on user feedback.
+
+## Personal Learnings
+
+1. (What I have already done) Reach out to people who are doing similar projects.
+   In my experience, they were always willing to meet. This always led to interesting conversations, but also great collaborations and advice, without which the current project would not have been possible.
+2. (What I am trying) Push for an early release to gather early feedback: don't build what **I** think people want, but what **they** actually want.
+
+
+## Links
+
+- stableHLO specification: [https://openxla.org/stablehlo/spec](https://openxla.org/stablehlo/spec).
+- Our project: [https://github.com/r-xla/anvil](https://github.com/r-xla/anvil).
+- JAX tutorial, which served as the design basis for this project: [https://docs.jax.dev/en/latest/autodidax.html](https://docs.jax.dev/en/latest/autodidax.html).

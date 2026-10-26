@@ -175,7 +175,7 @@ ggsave(
   here::here("eurobioc-poster", "figures", "benchmark.png"),
   p,
   width = 9,
-  height = 4,
+  height = 5,
   dpi = 200,
   device = ragg::agg_png
 )

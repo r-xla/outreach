@@ -1,1 +1,18 @@
+.DS_Store
 .superpowers/
+
+# Quarto render output
+.quarto/
+*.html
+*_files/
+*_cache/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.dvi
+talks/openxla-stack.pdf
+
+# Typst output
+eurobioc-poster/poster.pdf
+eurobioc-poster/preview-*.png

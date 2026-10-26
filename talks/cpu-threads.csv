@@ -1,0 +1,4 @@
+"workload","one_core_s","all_cores_s","speedup","n_cores"
+"dense matmul (2000x1000 · 1000x200)",0.02,0.005,4,8
+"dense matmul (6000x3000 · 3000x600)",0.558,0.104,5.36538461538462,8
+"HMC sampler (8 192 chains)",0.768999999999999,0.743,1.0349932705249,8

@@ -47,14 +47,14 @@
 
 #let codesm(code) = block(
   width: 100%, fill: codebg, radius: 5pt, inset: 7pt,
-  text(font: "JetBrains Mono", size: 26pt, fill: codefg, raw(code, lang: "r")),
+  text(font: "JetBrains Mono", size: 30pt, fill: codefg, raw(code, lang: "r")),
 )
 
 #let outbox(txt) = block(
   width: 100%, fill: white, stroke: 1pt + blueline, radius: 5pt, inset: 7pt,
   {
     set par(leading: 0.35em)
-    text(font: "JetBrains Mono", size: 26pt, fill: ink, raw(txt))
+    text(font: "JetBrains Mono", size: 30pt, fill: ink, raw(txt))
   },
 )
 
@@ -94,16 +94,15 @@
   columns: (1fr, 1fr), gutter: 20pt, align: top,
   band[
     #sec[Motivation]
-    *anvl* brings *compiled, GPU-accelerated array computing* to R:
-    you write numerical programs in plain R, which anvl compiles to optimized
-    machine code via *OpenXLA* — the compiler stack underpinning
-    frameworks like TensorFlow, JAX or PyTorch (TPU). anvl aspires to be for
-    R what JAX is for Python.
-    Unlike eager-first frameworks such as *torch*, anvl focuses on compilation,
-    which means it requires fewer hand-written CUDA kernels without sacrificing
-    performance.
+    *anvl aspires to be for R what JAX is for Python*: write numerical
+    programs in plain R, compiled via *OpenXLA* (the stack behind TensorFlow,
+    JAX, PyTorch-TPU) to optimized machine code on CPU or GPU.
+
+    Unlike eager-first frameworks such as *torch*, compilation lets anvl
+    deliver performance with fewer hand-written CUDA kernels.
   ],
   band[
+    #sec[Creating arrays]
     Create `AnvlArray`s from R objects with `nv_array()` — the `device` argument picks the hardware. Default `dtype` is `f32` and device `"cpu"`.
     #v(6pt)
     #codebox("X     <- nv_array(rnorm(N * P), shape = c(N, P), dtype = \"f32\")
@@ -123,7 +122,7 @@ y     <- nv_array(rnorm(N), shape = c(N, 1))")
   band[
     #sec[① Eager mode]
     Each operation (`%*%`, `+`) is *dispatched and run immediately*.
-    Primarily intended for interactive use and debugging.
+    For debugging and interactive use.
     #v(6pt)
     #codebox("linear <- function(X, beta, alpha)
   X %*% beta + alpha
@@ -141,7 +140,7 @@ y_hat <- fast(X, beta, alpha)")
   band[
     #sec[③ Automatic differentiation]
     `gradient()` returns a new function that computes *reverse-mode
-    gradients* of an R function. This is currently the only example of a semantic code transformation.
+    gradients* of an R function.
     #v(6pt)
     #codebox("loss <- function(X, y, beta, alpha)
   mean((linear(X, beta, alpha) - y)^2)
@@ -162,12 +161,9 @@ g    <- grad(X, y, beta, alpha)")
     [
       - same code runs on CPU and GPU
       - a more consistent array API than base R
-      - simplified CUDA install (only an NVIDIA driver needed)
-      - JIT compilation sets it apart from *torch*
       - written primarily in R, so easy to extend and contribute to
       - around 140 common functions already covered and more coming
       - possible use-cases: gradient-based methods, Monte Carlo samplers, expensive matrix algebra, etc.
-      - separates the *what* from the *how*: an alternative, experimental *quickr* backend transpiles to Fortran instead.
     ],
     [
         #box(width: 100%, fill: goodfill, stroke: 1.5pt + goodline,
@@ -175,10 +171,8 @@ g    <- grad(X, y, beta, alpha)")
           #text(size: 32pt, weight: "bold", fill: goodink)[✓ Fast when]
           #v(3pt)
           #text(size: 32pt)[
-            - The compilation overhead is amortized, either because:
-              - the function is called repeatedly with the same shapes and data types (can be enforced via padding)
-              - a single function call is substantial
-            - The work involves dense arrays
+            - compile overhead amortizes: repeated calls with the same shapes (padding can help) or one substantial call
+            - the work involves dense arrays
           ]
         ]
         #v(8pt)
@@ -187,8 +181,8 @@ g    <- grad(X, y, beta, alpha)")
           #text(size: 32pt, weight: "bold", fill: warnink)[✗ Not great (yet) when]
           #v(3pt)
           #text(size: 32pt)[
-            - Data-dependent shape computations cannot be part of a compiled function
-            - The data is sparse
+            - data-dependent shape computations are present (cannot be compiled)
+            - the data is sparse
           ]
         ]
     ],
@@ -206,9 +200,8 @@ g    <- grad(X, y, beta, alpha)")
     [
       #sec[How it works]
       #text(size: 32pt)[
-        anvl pipes your code through three types of *code transformations*, shown
-        below on the tiny example `f <- function(x) x * 2` — each
-        transformation called directly, with its output.
+        Three *code transformations*, shown below on `f <- function(x) x * 2`
+        with the output of each step.
       ]
     ],
     align(center, text(size: 24pt)[#diagram(
@@ -264,8 +257,7 @@ g    <- grad(X, y, beta, alpha)")
   Outputs:
     %2: f32[]"),
     step("③", "Lower", "AnvlGraph → Executable",
-      [Compile the graph into a hardware-specific executable.
-       Built on the *pjrt* and *stablehlo* packages, which are part of r-xla.],
+      [Compile the graph into a hardware-specific executable.],
       "hlo <- stablehlo(graph)[[1]]
 exe <- pjrt_compile(pjrt_program(repr(hlo)))
 print(hlo)",
@@ -285,15 +277,12 @@ print(hlo)",
 #band(fill: amberfill, line: amberline)[
   #sec[Application: randomized SVD]
   For $A in RR^(n times p)$ with $n,p$ large but only the top $k << min(n,p)$
-  singular triplets needed, the randomized SVD (Halko et al., 2011)
-  approximates them in four steps: sample
-  $Omega in RR^(p times k) tilde cal(N)(0,1)$;
+  singular triplets needed, the randomized SVD approximates them in four steps:
+  sample $Omega in RR^(p times k) tilde cal(N)(0,1)$;
   sketch $Y = A Omega in RR^(n times k)$;
   orthonormalize $Q R = Y$;
   and SVD the small matrix
-  $B = Q^T A = tilde(U) Sigma V^T$. Then
-  $A approx Q tilde(U) Sigma V^T$, giving the approximate top-$k$ triplets
-  $(Sigma, Q tilde(U), V^T)$. 
+  $B = Q^T A = tilde(U) Sigma V^T$.
   #v(8pt)
   #grid(
     columns: (1fr, 1fr), gutter: 30pt, align: top,
@@ -308,6 +297,8 @@ rsvd <- jit(function(A, key, k) {
 }, static = \"k\")")
       #v(4pt)
       #text(size: 24pt, fill: rgb("#5a6b7d"))[
+        Halko et al. (2011),
+        #link("https://arxiv.org/abs/0909.4061")[arxiv.org/abs/0909.4061].
         Based on Gundersen (2019),
         #link("https://gregorygundersen.com/blog/2019/01/17/randomized-svd/")[gregorygundersen.com/blog/2019/01/17/randomized-svd].
       ]
@@ -317,7 +308,7 @@ rsvd <- jit(function(A, key, k) {
       // are real numbers from this machine; GPU bar is a TODO placeholder.
       #box(width: 100%, fill: white, stroke: 1.5pt + amberline,
            radius: 6pt, inset: 8pt)[
-        #image("figures/benchmark.png", width: 90%, height: 420pt, fit: "contain")
+        #image("figures/benchmark.png", width: 90%, height: 480pt, fit: "contain")
       ]
     ],
   )

@@ -1,0 +1,39 @@
+---
+title: "Introducing anvil: Fast Numerical Computing for R"
+date: today
+format: html
+---
+
+We are happy to announce the initial release of [anvil](https://r-xla.github.io/anvil/), a code transformation framework for R that makes numerical programs fast.
+You write plain R functions, and anvil compiles them for high-speed execution on CPU or GPU through the [OpenXLA](https://openxla.org/) compiler infrastructure.
+It also provides automatic differentiation, so you can compute gradients without deriving them by hand.
+If you have used [JAX](https://jax.readthedocs.io/) in Python, anvil should feel familiar.
+
+This is an initial release, so expect rough edges.
+Many features are still missing and the set of built-in operations will continue to grow.
+We are releasing early because we believe the core functionality is already useful and we want to gather feedback from the community.
+If you run into problems or have ideas for what to add next, please open an issue on [GitHub](https://github.com/r-xla/anvil/issues).
+
+You can install anvil from [r-universe](https://r-xla.r-universe.dev/builds) or directly from GitHub with `pak::pak("r-xla/anvil")`.
+The [Get Started vignette](https://r-xla.github.io/anvil/articles/anvil.html) walks through a complete example, from creating tensors to training a linear model with gradient descent, and the full API is documented on the [package website](https://r-xla.github.io/anvil/).
+
+## JIT Compilation
+
+The central idea of anvil is that you write ordinary R functions and then hand them to `jit()`, which compiles them into optimized executables via the XLA compiler.
+The compiled code runs much faster than interpreted R, because the compiler can see the entire computation at once and apply optimizations such as operator fusion and efficient memory layout.
+Once compiled for a given set of input shapes and types, the result is cached, so repeated calls pay no compilation overhead.
+
+## Hardware Backends
+
+The same anvil code runs on CPU and GPU without modification.
+Under the hood, anvil delegates execution to the [PJRT](https://github.com/r-xla/pjrt) runtime, which provides platform-specific plugins.
+Switching backends is a matter of configuration, not code changes.
+This makes it possible to develop and test on a laptop and then scale to GPU hardware when needed.
+
+## Automatic Differentiation
+
+anvil implements backward-mode automatic differentiation.
+Given a function with a scalar output, `gradient()` returns a new function that computes the gradient with respect to a chosen subset of its arguments.
+This transformation composes naturally: you can define a loss function in plain R, derive its gradient, and build an optimization loop -- all without leaving R or writing any mathematical derivations by hand.
+This is particularly useful for gradient-based optimization, such as fitting Bayesian models or training neural networks.
+

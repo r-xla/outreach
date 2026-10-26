@@ -1,0 +1,692 @@
+---
+title: "Compiled GPU Computing for R"
+subtitle: "The r-xla ecosystem"
+author: "Sebastian Fischer, Daniel Falbel, Bernd Bischl"
+date: 2026-05-19
+format:
+  clean-revealjs:
+    slide-number: true
+    transition: fade
+    navigation-mode: linear
+    slide-level: 2
+execute:
+  echo: true
+  eval: true
+  output: true
+---
+
+```{r}
+#| include: false
+library(anvl)
+set.seed(42)
+```
+
+## What is r-xla?
+
+An ecosystem of R packages that brings
+**hardware-accelerated array computing**
+and **code transformations** to R.
+
+The user-facing package, **`anvl`**, provides:
+
+- Just-in-time compilation of numerical R code
+- Reverse-mode automatic differentiation
+- Native execution on CPU and NVIDIA GPU
+
+Built on the **OpenXLA** compiler stack — the same
+infrastructure behind JAX, TensorFlow, and PyTorch (TPU).
+
+{anvl} aspires to be for R what JAX is for Python.
+
+## Why r-xla?
+
+- Enable GPU computing in R
+- Enable compilation of programs to easily go beyond what hard-coded kernels can do (as in {torch}).
+- LibTorch (C++ library underpinning PyTorch) is tightly coupled to PyTorch. XLA is a little more independent.
+- Solve some of {torch}'s performance issues (R interpreter overhead; intermediate GPU allocations tied to R garbage collector).
+- No DL framework (would require library on top) — just array computing.
+
+## The OpenXLA ecosystem
+
+OpenXLA is an open-source ML compiler stack. anvl is one of several frontends
+that target it:
+
+```{mermaid}
+%%| fig-align: center
+%%| echo: false
+flowchart TB
+    A["anvl<br/>(R)"]:::ours
+    J["JAX<br/>(Python)"]
+    T["TensorFlow<br/>(Python)"]
+    P["PyTorch/XLA<br/>(Python)"]
+    G["GoMLX<br/>(Go)"]
+    Z["ZML<br/>(Zig)"]
+
+    subgraph openxla["OpenXLA"]
+        direction TB
+        S["StableHLO<br/>portable IR"]
+        R["PJRT<br/>runtime API"]
+        S --> R
+    end
+
+    A --> S
+    J --> S
+    T --> S
+    P --> S
+    G --> S
+    Z --> S
+
+    R --> CPU["CPU"]
+    R --> NVIDIA["NVIDIA GPU"]
+    R --> AMD["AMD GPU"]
+    R --> METAL["Metal"]
+    R --> TPU["Google TPU"]
+
+    classDef ours fill:#e8f0fe,stroke:#5085f7,stroke-width:2px
+```
+
+## Overview
+
+We descend through the stack, top to bottom:
+
+1. `anvl` — user interface and internals.
+2. OpenXLA
+   - StableHLO — the intermediate representation (R package {stablehlo}).
+   - PJRT — the runtime (R package {pjrt}).
+3. Dependency handling, Extending, Performance
+
+## anvl {.center}
+
+## Installation
+
+{anvl} is not yet on CRAN, so we have to install from r-universe or GitHub:
+
+```r
+install.packages(
+  "anvl",
+  repos = c("https://r-xla.r-universe.dev", getOption("repos"))
+)
+```
+
+CPU works out of the box. For NVIDIA GPU (Linux x86_64), install compatible CUDA dependencies (requires only compatible driver) via:
+
+```r
+install.packages(
+  "cuda12.8",
+  repos = "https://mlverse.r-universe.dev"
+)
+```
+
+Other dependencies will be downloaded on-demand, more on that later.
+
+## `AnvlArray`
+
+The core data type: a multi-dimensional array on a device.
+The prefix `nv_` is short for `anvl` to avoid name collisions with other packages.
+
+```{r}
+# We'll reuse these throughout the anvl examples
+X     <- nv_array(rnorm(9), shape = c(3, 3), "f32")     # feature matrix
+beta  <- nv_array(rnorm(3), "f32", shape = c(3, 1L))    # parameter vector
+alpha <- nv_scalar(0, "f32")                            # scalar bias
+y     <- nv_array(c(0, 1, 0), "f32", shape = c(3, 1L))  # binary labels
+
+X
+```
+
+- **dtype**: `f32`, `f64`, `i32`, `bool`, …
+- **shape**: e.g. `c(3, 3)`
+- **device**: CPU, NVIDIA GPU, …
+
+## `nv_*` operations
+
+Around **140 array operations** — standard NumPy/JAX surface, adapted to R.
+They call into the lower-level `prim_*` primitives (more later).
+
+- **Construction** — `nv_array`, `nv_scalar`, `nv_fill`, `nv_iota`, `nv_eye`, …
+- **Manipulation** — `nv_reshape`, `nv_transpose`, `nv_concatenate`, `nv_subset`, `nv_pad`, …
+- **Type conversion & broadcasting** — `nv_convert`, `nv_broadcast_to`, …
+- **Serialization** — `nv_save`, `nv_read`, `nv_serialize`
+- **Arithmetic** — `nv_add`, `nv_sub`, `nv_mul`, `nv_div`, `nv_pow`, `nv_negate`, …
+- **Comparison** — `nv_eq`, `nv_ne`, `nv_gt`, `nv_lt`, …
+- **Mathematical functions** — `nv_exp`, `nv_log`, `nv_sin`, `nv_lgamma`, … (~40)
+- **Logical & bitwise** — `nv_and`, `nv_or`, `nv_xor`, shifts, …
+- **Element-wise** — `nv_min`, `nv_max`, `nv_clamp`
+
+## `nv_*` operations (continued)
+
+- **Reductions** — `nv_reduce_sum`, `nv_reduce_max`, `nv_reduce_all`, …
+- **Statistical summaries** — `nv_mean`, `nv_median`, `nv_var`, `nv_sd`, `nv_quantile`
+- **Cumulative** — `nv_cumsum`, `nv_cumprod`, `nv_cummax`, `nv_cummin`
+- **Linear algebra** — `nv_matmul`, `nv_chol`, `nv_qr`, `nv_svd`, `nv_eigh`, `nv_solve`, …
+- **Sorting & searching** — `nv_sort`, `nv_top_k`, `nv_argmax`, `nv_argmin`
+- **Control flow** — `nv_if`, `nv_while`, `nv_ifelse`
+- **Random numbers** — `nv_runif`, `nv_rnorm`, `nv_rbinom`, `nv_rdunif`
+- **Debugging** — `nv_print`
+
+## Eager mode (default)
+
+- Each primitive op compiled to a tiny XLA program → executed immediately
+- No fusion across calls
+- Below: 4 small programs compiled (`logistic`, `%*%`, `+`, broadcast of `alpha`)
+
+```{r}
+predict_proba <- function(X, beta, alpha) {
+  nv_logistic(X %*% beta + alpha)
+}
+
+predict_proba(X, beta, alpha)
+```
+
+→ Primarily for **debugging** and **interactive exploration**.
+
+## JIT mode
+
+- `jit(f)` combines the **whole function** into a single executable
+- XLA optimizes across operations (fusion, layout, scheduling)
+- Better performance — the main motivation behind XLA
+
+```{r}
+predict_jit <- jit(predict_proba)
+predict_jit(X, beta, alpha)
+```
+
+## `gradient()` — automatic differentiation
+
+`gradient(f, wrt = ...)` returns a new function that computes the gradient.
+
+```{r}
+# Binary cross-entropy loss
+loss <- function(X, y, beta, alpha) {
+  pred <- predict_proba(X, beta, alpha)
+  mean(-(y * log(pred) + (1 - y) * log(1 - pred)))
+}
+
+grad <- jit(gradient(loss, wrt = c("beta", "alpha")))
+
+grad(X, y, beta, alpha)
+```
+
+## Example: a JIT-compiled training loop
+
+We can combine the `loss` and `grad` defined earlier to get a function that fits a logistic regression model using gradient descent.
+
+```{r}
+fit <- jit(function(X, y, beta, alpha, n_epochs, lr) {
+  nv_while(
+    list(beta = beta, alpha = alpha, epoch = nv_scalar(0L)),
+    \(beta, alpha, epoch) epoch < n_epochs,
+    \(beta, alpha, epoch) {
+      g <- grad(X, y, beta, alpha)
+      list(
+        beta  = beta  - lr * g$beta,
+        alpha = alpha - lr * g$alpha,
+        epoch = epoch + 1L
+      )
+    }
+  )
+})
+
+result <- fit(X, y, beta, alpha, 1000L, 0.1)
+```
+
+The whole training loop is one compiled program.
+
+## How it works {.center}
+
+## Three types of code transformations
+
+![](three-transformations.svg){fig-align="center"}
+
+1. **Trace** — R function → `AnvlGraph` (our custom IR)
+2. **Transform** — `AnvlGraph` → `AnvlGraph` (e.g. `gradient()`)
+3. **Lower** — `AnvlGraph` → device executable (via OpenXLA).
+
+## AnvlGraph
+
+anvl's IR — a small R data structure representing a **pure function**
+(no side effects, no global state — outputs depend only on inputs):
+
+- **Inputs** + **outputs** — typed `GraphValue`s (shape + dtype)
+- **Body** — a sequence of `PrimitiveCall`s
+- In SSA form: each variable assigned exactly once
+
+No closures, no R control flow — just a typed list of primitive calls.
+
+Conceptually similar to (but distinct from) **StableHLO**, which we cover later.
+
+## Primitives
+
+- **`AnvlPrimitive`s** — atomic ops that make up an `AnvlGraph`
+- They define what can be expressed in {anvl}
+- Each primitive carries an (extendable) table of **rules** keyed by transformation, including:
+  - **`stablehlo`** — translation to StableHLO for compilation
+  - **`reverse`** — the derivative
+- New rules can be added for custom transformations / alternative backends.
+
+```{r}
+prim_add[["stablehlo"]]
+```
+
+## `prim_*` vs `nv_*`
+
+- **`prim_*`** — the low-level primitives. Together they define
+  which ops anvl supports.
+- **`nv_*`** — user-facing wrappers with R-idiomatic semantics
+  (type promotion, broadcasting, sensible defaults).
+
+Users almost always call `nv_*`.
+
+## Tracing 
+
+- Substitute each input with an *abstract value* (shape + dtype).
+- Run the function once with these stand-ins.
+- Instead of performing operations, they get recorded in the `AnvlGraph`
+- Contrast: *static analysis* like `quickr` parses the source without running.
+
+```{r}
+f <- function(x, y) x * y + 1
+
+trace_fn(f, args = list(
+  x = nv_aval("f32", integer()),
+  y = nv_aval("f32", integer())
+))
+```
+
+## Tracing — R loops are unrolled
+
+A `for` loop runs at trace time, recording each iteration into the graph.
+
+```{r}
+loop <- function(x, n) {
+  for (i in seq_len(n)) x <- nv_logistic(x)
+  x
+}
+
+trace_fn(loop, args = list(x = nv_aval("f32", integer()), n = 3L))
+```
+
+*See the [JIT Deep Dive — Tracing section](https://r-xla.github.io/anvl/articles/jit.html#tracing)
+for more subtleties (`if`-branches, closures, side effects).*
+
+## Graph → Graph transformation
+
+- Implements semantic program transformations
+- Currently only `gradient()` (a thin wrapper around `transform_gradient()`)
+- No restrictions on **how** the transformation is implemented
+- For interesting transformations, store special rules in primitives, like the `reverse` rule for gradient:
+
+  ```{r}
+  prim_mul[["reverse"]]$backward
+  ```
+
+## Graph → Graph transformation — example
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**Original graph**
+
+```{r}
+graph <- trace_fn(f, args = list(
+  x = nv_aval("f32", integer()),
+  y = nv_aval("f32", integer())
+))
+graph
+```
+:::
+
+::: {.column width="50%"}
+**Its gradient**
+
+```{r}
+transform_gradient(graph, wrt = c("x", "y"))
+```
+:::
+
+::::
+
+## Possible Future Transformations
+
+* `batchmap` (similar to R's `Vectorize`): Makes batched functions easier to write.
+* forward-mode AD (e.g. needed for Hessians)
+
+## Lowering: Graph → Executable
+
+The third (and final) code transformation is about transforming an `AnvlGraph` to an executable.
+For this we use the OpenXLA project, which we will cover next.
+
+## What is OpenXLA?
+
+A shared compiler stack so frameworks don't reinvent compilation,
+and hardware vendors don't reinvent kernels for every framework.
+
+The pieces we'll cover:
+
+- **XLA** — the compiler that consumes StableHLO and emits hardware-specific code.
+- **StableHLO** — portable, versioned IR specification.
+- **PJRT** — runtime API for compiling and executing programs, allocating data, etc.
+  We interface the XLA compiler via PJRT.
+
+## How r-xla uses OpenXLA
+
+- **`stablehlo`** — native R implementation. Constructs StableHLO programs
+  in pure R, no C++ dependencies → easy to install.
+- **`pjrt`** — R bindings to the PJRT C++ runtime; loads prebuilt
+  hardware-specific plugins (CPU, CUDA, …) dynamically.
+  
+## What is XLA?
+
+**Accelerated Linear Algebra** — the compiler at the heart of OpenXLA.
+
+- Takes a StableHLO program as input
+- Applies optimization passes: **fusion**, **layout assignment**, **scheduling**
+- Emits hardware-specific code (LLVM IR on CPU; CUDA / ROCm + cuBLAS / cuDNN on GPU)
+- Originally developed inside TensorFlow at Google
+- Now the canonical compiler behind **JAX, TensorFlow, PyTorch/XLA, r-xla**
+
+Alternative: **IREE** — also consumes StableHLO (better dynamic shape support, less mature).
+
+## XLA — design objectives
+
+- **Improve execution speed** — compile subgraphs to reduce short-lived
+  op overhead, fuse pipelined ops to reduce memory traffic, specialize
+  known shapes for aggressive constant propagation.
+- **Improve memory usage** — analyze and schedule allocations, eliminate
+  many intermediate buffers.
+- **Reduce reliance on custom ops** — auto-fused low-level ops match
+  the performance of hand-fused custom ops.
+
+## StableHLO {.center}
+
+## What is StableHLO?
+
+A **portable, versioned IR specification** for linear algebra/ML programs:
+
+- ~100 primitive ops (add, multiply, dot, convolution, …)
+- Strict type system: every value has known shape + dtype
+- Built on **MLIR** (part of the LLVM ecosystem)
+- Consumed by the XLA compiler (and others, e.g. IREE)
+- Specification: [https://openxla.org/stablehlo/spec](https://openxla.org/stablehlo/spec)
+
+The bridge between frontends (anvl, JAX, ...) and backends (CPU, GPU, ...).
+
+## `stablehlo` — building a program
+
+Pure-R functional builder API for StableHLO programs — no C++ dependencies.
+
+```{r}
+library(stablehlo)
+func <- hlo_func("main")
+a <- hlo_input("a", "f32", shape = c(2, 2))
+b <- hlo_input("b", "f32", shape = c(2, 2))
+prog_hlo <- hlo_return(hlo_add(a, b))
+prog_hlo
+```
+
+The output is a valid MLIR / StableHLO program — ready for PJRT.
+
+## From `AnvlGraph` to StableHLO
+
+`anvl::stablehlo(graph)` walks the `AnvlGraph` and applies each
+primitive's `stablehlo` rule to build the equivalent StableHLO program.
+
+:::: {.columns}
+
+::: {.column width="50%"}
+**AnvlGraph**
+
+```{r}
+graph
+```
+:::
+
+::: {.column width="50%"}
+**StableHLO**
+
+```{r}
+prog <- anvl::stablehlo(graph)[[1]]
+prog
+```
+:::
+
+::::
+
+## Portable programs — both directions
+
+A StableHLO program is just MLIR text — not tied to R or to anvl.
+
+- **Export from anvl, run elsewhere.** Hand the program to any
+  StableHLO-aware runtime (PJRT, IREE, …). The recipient doesn't need R.
+- **Import from elsewhere, run in `pjrt`.** Programs produced by
+  JAX, PyTorch/XLA, TensorFlow, GoMLX, ZML, … compile and run unchanged.
+
+## Static shapes
+
+**StableHLO itself supports dynamic shapes** (`tensor<?xi32>`), but
+the **XLA compiler** requires shapes to be fully known at compile time —
+fusion, layout, scheduling, memory allocation, and kernel launch
+parameters are all computed statically.
+
+Ops whose output shape depends on data — `unique()`, boolean masking,
+dynamic slicing — can't be part of a JIT'd program.
+(But they are available in *eager* mode).
+
+## Each input shape ⇒ one compile
+
+```{r, message = TRUE}
+fn <- jit(function(X, beta, alpha) {
+  message("compiling for X shape ", paste(shape(X), collapse = "x"))
+  nv_logistic(X %*% beta + alpha)
+})
+
+fn(X, beta, alpha)        # compile + run (X is 3x3)
+X_big <- nv_array(rnorm(3), shape = c(1, 3), "f32")
+fn(X_big, beta, alpha)    # new shape  -> recompile
+fn(X_big, beta, alpha)    # same shape -> cache hit
+```
+
+## Working around static shapes
+
+**Pad + mask** — pad inputs to a fixed maximum size and zero out the
+padded positions inside the JIT'd function:
+
+```{r}
+n_max <- 8L
+
+pad_and_sum <- jit(function(x, mask) {
+  nv_reduce_sum(x * mask)   # mask zeros out padding
+})
+
+# 4 real values padded to length 8
+x    <- nv_array(c(2, 5, 1, 4, 0, 0, 0, 0), shape = n_max, "f32")
+mask <- nv_array(c(1, 1, 1, 1, 0, 0, 0, 0), shape = n_max, "f32")
+
+pad_and_sum(x, mask)
+```
+
+Wasted compute, but on GPU **idle lanes are cheap**.
+
+## PJRT {.center}
+
+## What is PJRT?
+
+**Pluggable JIT Runtime** — a C API *specification*, not an implementation.
+
+- Just a **header file** (`pjrt_c_api.h`) defining the interface
+- Implementations ship as separate **shared libraries** ("plugins")
+  - One plugin per backend (CPU, CUDA, Metal, Google TPU, AMD ROCm, …)
+  - Loaded dynamically at runtime
+
+## PJRT — core operations
+
+The interface defines:
+
+- buffer allocation (host ↔ device). `AnvlArray`s are `PJRTBuffer` objects under the hood.
+- program compilation (StableHLO → executable)
+- program execution (asynchronous)
+
+Same code runs on any backend with a correctly implemented plugin.
+
+## `pjrt` — compile + execute
+
+Three primitives: **programs**, **buffers**, **executables**.
+
+```{r}
+library(pjrt)
+str <- repr(prog)
+cat(str, sep = "\n")
+program <- pjrt_program(str, format = "mlir")
+exe <- pjrt_compile(program, device = "cpu")
+
+x_buf <- pjrt_buffer(2, dtype = "f32")
+y_buf <- pjrt_buffer(3, dtype = "f32")
+pjrt_execute(exe, x_buf, y_buf)
+```
+
+## Dependency handling {.center}
+
+## (Relatively) Easy install
+
+- Building {pjrt} R package from source requires `protoc` protobuf compiler.
+- During runtime, we need `libprotobuf`
+- CPU plugins have no additional dependencies and just work.
+- The CUDA plugin requires additional runtime libraries which can be installed via `cuda12.8` package.
+
+## PJRT plugins — downloaded on first use
+
+We don't bundle plugin binaries with `pjrt` — they're large and platform-specific.
+On first use, `pjrt` downloads the right one and caches it.
+
+- **`zml/pjrt-artifacts`** — pinned versioned releases (most platforms)
+- **`r-xla/pjrt-builds`** — our own builds for Windows + Linux ARM
+
+Plugin is then loaded with `dyn.load()` and called through the PJRT C API.
+
+## How `cuda12.8` works
+
+1. Downloads pre-built CUDA wheels from **PyPI** during install time (`configure` script).
+   The downloads are stored alongside the `cuda12.8` package.
+2. Patches the binaries with **`patchelf`** to set RPATH so the
+   CUDA shared libraries find each other.
+3. Other packages (like `pjrt`) can `dyn.load()` the downloaded libraries to ensure that the CUDA
+   dependencies with the right versions are used. They can also use the binaries shipped with
+   cudatoolkit (like `nvcc`).
+   
+Note: different CUDA versions (like `cuda12.8` and `cuda13.2`) can simultaneously be installed, but
+only one can be loaded at a time.
+
+## More on CUDA
+
+- Components: `runtime`, `cublas`, `cudnn`, `cufft`, `cusolver`, `cusparse`, `nvcc`, ...
+- `cuda12.8` is **optional** — manual CUDA setup works too, but it's much harder.
+- Prebuilt Docker images are also available.
+- `cuda12.8` can probably **never go to CRAN.** Steps 1 + 2 happen at install time and download binaries from the network — CRAN's build policy forbids that.
+
+## Platform support
+
+**Currently supported:**
+
+- CPU — Linux (arm64, amd64), Windows, Apple Silicon
+- NVIDIA GPU on **Linux x86_64** (WSL2 should hopefully also work)
+
+**Could be added (PJRT plugins exist):**
+
+- NVIDIA GPU on **Linux ARM** — same plugin, ARM build
+- **AMD GPU** — XLA **ROCm** plugin
+
+**JAX Metal** is unfortunately not maintained anymore.
+Watch [tillahoffmann/jax-mps](https://github.com/tillahoffmann/jax-mps) for a community-driven alternative.
+
+## Backends — anvl is not tied to XLA
+
+- `AnvlBackend` separates **how** users write code (frontend) from
+**what** runs (data storage + graph lowering).
+- It is like a "mini PJRT" in R.
+- There exists an experimental alternative {quickr} backend (e.g. `jit(f, backend = "quickr")`).
+- Another alternative backend could e.g. be provided via {torch}.
+- Alternative backends still inherit all other functionality like `gradient()`.
+  
+## Extending {.center}
+
+## Extending anvl
+
+While {anvl} already covers a lot of ground, it does not cover everything.
+
+1. **`nv_<op>`** — compose existing functionality / primitives.
+   [Vignette: Extending the API](https://r-xla.github.io/anvl/dev/articles/extending_api.html)
+2. **`prim_<op>`** — when no composition works.
+   [Vignette: Adding a Primitive](https://r-xla.github.io/anvl/dev/articles/extending_primitive.html)
+
+   Three cases:
+
+   - Already in the `{stablehlo}` R package → easiest
+   - Expressible in StableHLO but not yet in `{stablehlo}` → extend `{stablehlo}`
+   - Not (efficiently) expressible in StableHLO → register a **custom call** (next slide)
+
+## Custom calls (FFI)
+
+When no StableHLO op exists for what you need, PJRT's **FFI** lets you
+register C/C++ handlers as custom ops:
+
+- Write a handler against XLA's FFI C API
+- Register from R: `pjrt::pjrt_register_custom_call("name", handler)`
+- Emit in the program: `stablehlo.custom_call @name(...)`
+- Per-platform dispatch — same op name, different CPU vs CUDA handler
+
+Some operations in {anvl} are implemented this way.
+
+## Custom calls today — and where they're going
+
+Today, anvl's CUDA custom calls only invoke **precompiled kernels** from
+NVIDIA's libraries (cuBLAS, cuDNN, cuFFT, cuSOLVER, …) — shipped via
+`cuda12.8`. Useful, but you can't write a new CUDA kernel from R.
+
+**Goal: fully custom CUDA kernels.** The components are already in place:
+
+- `cuda12.8` ships **`nvcc`**.
+- PJRT's FFI can register the resulting handler like any other custom call
+
+What's missing is just the wiring on the R side — a workflow for compiling
+a `.cu` file and registering its entry point with `pjrt`. Future work.
+
+## Outro {.center}
+
+## Performance
+
+The question isn't whether XLA is fast.
+It's whether **your problem** is the kind XLA is fast for.
+
+- **Sweet spot:** dense arrays · regular shapes · repeated computation
+  (amortizes compile cost) · batched / GPU-amenable
+- **Not a fit:** workloads dominated by tiny ops · many data-dependent
+  shapes · irregular sparse access
+
+## Using anvl in Bioconductor / CRAN packages
+
+- CRAN release planned relatively soon
+- **Catch:** tests requiring the XLA compiler can't run on CRAN by default —
+  it downloads prebuilt libraries (same issue as R `torch`).
+- For r-xla to become stable GPU infrastructure, we'd want those tests to run
+  so `revdepcheck` works on dependent packages. Would need to contact Uwe Ligges
+  for that.
+  Otherwise, `revdepchecks` would have to be run outside of typical CRAN / Bioconductor infrastructure to avoid breaking changes.
+
+
+## Next steps / goals
+
+- Personal goal: Build an ecosystem that's **actually useful** for the R community
+- Getting feedback from trying to use {anvl} would be great and would help prioritization.
+- Writing an **R Journal paper** — real-world use cases very welcome.
+- Contributions welcome — happy to collaborate
+
+## Thank you
+
+**Acknowledgments.**
+This work is supported by **MaRDI** — the Mathematical Research Data
+Initiative, an NFDI project funded by DFG grant 460135501.
+
+**Catch me at:**
+
+- **Bioconductor Conference** + **Hackathon** — Turku, Finland
+- **useR!** — Warsaw, Poland
