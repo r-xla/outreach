@@ -1,0 +1,72 @@
+/* Step-through slides (tracing, backward pass): the part being processed is
+   marked .now, what the step added to the graph is marked .new. */
+.trace-code,
+.trace-graph {
+  line-height: 1.4;
+  padding: 0.6em 0.8em;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fafafa;
+  white-space: pre;
+  overflow: visible;
+}
+
+.trace-code {
+  font-size: 0.55em;
+}
+
+.trace-graph {
+  font-size: 0.46em;
+}
+
+.trace-code .now {
+  background: #fde68a;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.trace-graph .now,
+.trace-graph .new {
+  display: inline-block;
+  width: 100%;
+}
+
+.trace-graph .now {
+  background: #fde68a;
+}
+
+.trace-graph .new {
+  background: #dbeafe;
+}
+
+.trace-graph .dim {
+  color: #999;
+  font-style: italic;
+}
+
+.trace-caption {
+  font-size: 0.6em;
+  color: #555;
+  margin-top: 0.6em;
+}
+
+/* The step of an animation, appended to the slide number by
+   step-numbers.html. */
+.slide-number-step {
+  font-size: 0.8em;
+  opacity: 0.7;
+}
+
+/* Dynamic dimensions that must be equal share a color. */
+.sig .dim-n {
+  background: #fde68a;
+}
+
+.sig .dim-p {
+  background: #bfdbfe;
+}
+
+/* Long printed IR in a backup slide. */
+.hlo-dump {
+  font-size: 0.7em;
+}
