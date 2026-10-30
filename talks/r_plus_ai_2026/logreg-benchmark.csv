@@ -1,0 +1,4 @@
+"implementation","ms","n","p","n_steps","blas"
+"base_r",205.995559692383,10000,10,500,"reference"
+"anvl",28.457522392273,10000,10,500,"reference"
+"anvl_compile",49.1665601730347,10000,10,500,"reference"
