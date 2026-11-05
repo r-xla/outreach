@@ -1,0 +1,24 @@
+<script>
+// Slides of one animation share a slide number (all but the last step are
+// uncounted). Append the step, so that the number reads e.g. "14/2".
+window.addEventListener("load", function () {
+  function markStep() {
+    var number = document.querySelector(".slide-number .slide-number-a") ||
+      document.querySelector(".slide-number a");
+    var slide = Reveal.getCurrentSlide();
+    if (!number || !slide) return;
+    var old = number.querySelector(".slide-number-step");
+    if (old) old.remove();
+    var step = slide.getAttribute("data-step");
+    if (!step) return;
+    var span = document.createElement("span");
+    span.className = "slide-number-step";
+    span.textContent = "/" + step;
+    number.appendChild(span);
+  }
+  ["ready", "slidechanged", "fragmentshown", "fragmenthidden"].forEach(function (event) {
+    Reveal.on(event, markStep);
+  });
+  markStep();
+});
+</script>

@@ -1,0 +1,88 @@
+% Tracing, on the AST of a small function: R evaluates the grey nodes at
+% trace time and they leave no trace; the blue nodes reach an overloaded
+% array operation and are transcribed into the graph as primitives.
+% intercept-ast.tex sets \intercepting to 1 and draws the same tree as an
+% interpreter-intercepting compiler sees it: it has to execute every node.
+\providecommand{\intercepting}{0}
+\documentclass[tikz, border=8pt]{standalone}
+\usepackage{forest}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, calc}
+
+\begin{document}
+\ifnum\intercepting=1
+  \forestset{staged/.style={draw=orange!75!black, fill=orange!10, thick, text=black}}
+\else
+  \forestset{staged/.style={draw=black!35, dashed, fill=black!4, text=black!55}}
+\fi
+\begin{forest}
+  for tree={
+    draw, rounded corners=2pt, thick, font=\ttfamily\small,
+    minimum height=0.6cm, minimum width=0.8cm, inner sep=3pt,
+    s sep=5mm, l sep=7mm, edge={thick, draw=black!45}
+  },
+  where level=0{s sep=16mm}{},
+  prim/.style={draw=blue!65, fill=blue!12, very thick},
+  input/.style={draw=black!65, fill=white},
+  [\{, staged, name=root
+    [<-, staged
+      [s, staged]
+      [*, staged, name=pi
+        [2, staged, name=two] [pi, staged, name=pisym]]]
+    [<-, staged
+      [y, staged]
+      [\%*\%, prim, name=mm
+        [x, input, name=xin] [w, input, name=win]]]
+    [exp, prim, name=exp
+      [*, prim, name=mul
+        [y, staged] [s, staged]]]
+  ]
+  \tikzset{
+    note/.style={font=\footnotesize, align=left, inner sep=2pt},
+    gnote/.style={note, text=black!55},
+    bnote/.style={note, text=blue!65!black}
+  }
+  \ifnum\intercepting=1
+    \node[note, align=center, text=orange!60!black] at ([yshift=-0.55cm]$(two.south)!0.5!(pisym.south)$) {folded by the compiler:\\[-1pt]it must know \texttt{*}, \texttt{pi}};
+    \node[note, align=left, text=orange!60!black, right=0.3cm of root] {anything it cannot\\[-1pt]model: a graph break};
+  \else
+    \node[gnote, align=center] at ([yshift=-0.55cm]$(two.south)!0.5!(pisym.south)$) {evaluated by R:\\[-1pt]\texttt{6.283185}};
+  \fi
+  \node[bnote, align=center] at ([yshift=-0.4cm]$(xin.south)!0.5!(win.south)$) {\texttt{\%1 = dot\_general}};
+  \node[bnote, right=0.15cm of exp] {\texttt{\%4 = exp}};
+  \node[bnote, right=0.15cm of mul, align=left] {\texttt{\%2 = broadcast\_in\_axes}\\[-1pt]\texttt{\%3 = mul}};
+  % The function, left of the tree.
+  \node[draw=black!50, rounded corners=3pt, thick, fill=white, align=left,
+        font=\ttfamily\small, inner sep=6pt, anchor=north east]
+    (code) at ([xshift=-2.6cm, yshift=0.3cm]root.north -| current bounding box.west)
+    {f <- function(x, w) \{\\
+     \ \ s <- 2 * pi\\
+     \ \ y <- x \%*\% w\\
+     \ \ exp(y * s)\\
+     \}};
+  % The graph it traces to, below the function.
+  \node[draw=blue!65, rounded corners=3pt, very thick, fill=blue!5, align=left,
+        font=\ttfamily\small, inner sep=6pt, below=0.9cm of code.south west, anchor=north west]
+    (graph)
+    {\%1 = dot\_general(\%x1, \%x2)\\
+     \%2 = broadcast\_in\_axes(6.283185)\\
+     \%3 = mul(\%1, \%2)\\
+     \%4 = exp(\%3)\\
+     return \%4};
+  \node[font=\footnotesize\bfseries, above=1pt of code.north west, anchor=south west] {the function};
+  \node[font=\footnotesize\bfseries, above=1pt of graph.north west, anchor=south west, text=blue!65!black] {the traced graph};
+  \node[font=\footnotesize\bfseries, above=4pt of root] {its AST};
+  % Legend.
+  \ifnum\intercepting=1
+    \node[draw=orange!75!black, fill=orange!10, thick, rounded corners=2pt, minimum width=0.5cm, minimum height=0.35cm,
+          below=0.6cm of graph.south west, anchor=north west] (l1) {};
+    \node[note, right=0.15cm of l1] {executed symbolically by the compiler: it has to model R's semantics};
+  \else
+    \node[draw=black!35, dashed, fill=black!4, rounded corners=2pt, minimum width=0.5cm, minimum height=0.35cm,
+          below=0.6cm of graph.south west, anchor=north west] (l1) {};
+    \node[note, right=0.15cm of l1] {staged out: R evaluates it at trace time, nothing is recorded};
+  \fi
+  \node[draw=blue!65, fill=blue!12, very thick, rounded corners=2pt, minimum width=0.5cm, minimum height=0.35cm,
+        below=0.25cm of l1] (l2) {};
+  \node[note, right=0.15cm of l2] {array operation on a \texttt{GraphBox}: transcribed into the graph as primitives};
+\end{forest}
+\end{document}

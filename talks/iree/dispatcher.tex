@@ -1,36 +1,71 @@
-% What happens when a jitted function is called: the hit path stays in C++,
-% only a miss goes back into R.
-\documentclass[tikz, border=10pt]{standalone}
-\usetikzlibrary{arrows.meta, positioning}
+% What happens when a jitted function is called: pjrt's C++ dispatcher builds
+% the cache key and looks it up in an LRU cache of executables. A hit runs the
+% executable without entering R; a miss traces, lowers and compiles in R and
+% the PJRT plugin. The entries are the running example at n = 1000, 999, 998.
+\documentclass[tikz, border=8pt]{standalone}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
 
 \begin{document}
 \begin{tikzpicture}[
-  node distance=1.8cm,
+  every node/.style={font=\small},
   box/.style={
     draw, rounded corners=3pt, thick,
-    minimum width=2.6cm, minimum height=1.1cm,
-    align=center, font=\small
+    minimum height=1cm, align=center
   },
-  cpp/.style={box, fill=blue!10, draw=blue!60, very thick},
-  rside/.style={box, fill=blue!3, draw=blue!40, dashed, thick},
-  ext/.style={box, fill=black!5, draw=black!45},
-  arr/.style={-{Stealth[length=3mm, width=2mm]}, thick},
-  lab/.style={font=\scriptsize}
+  cpp/.style={box, fill=white, draw=blue!60, very thick},
+  rcode/.style={box, fill=white, draw=orange!70!black, very thick},
+  plugin/.style={box, fill=white, draw=black!55, very thick, minimum width=2.4cm},
+  entry/.style={
+    draw=blue!50, fill=blue!4, rounded corners=2pt,
+    minimum width=5.4cm, minimum height=0.55cm, font=\footnotesize\ttfamily
+  },
+  region/.style={rounded corners=6pt, inner sep=9pt},
+  rlab/.style={font=\footnotesize\bfseries, anchor=north west, inner sep=4pt},
+  arr/.style={-{Stealth[length=2.6mm, width=1.8mm]}, thick, draw=black!70},
+  lab/.style={font=\footnotesize\itshape, text=black!70},
+  shape/.style={text=red!70!black, font=\bfseries}
 ]
-  \node[box] (call) {\texttt{f(X, y)}\\[-2pt]{\footnotesize R call}};
-  \node[cpp, right=of call] (key)
-    {key = hash(tree,\\dtypes, \textbf{shapes},\\static values)};
-  \node[cpp, right=of key] (lru) {LRU cache\\of executables};
-  \node[ext, right=of lru] (exec) {\texttt{Execute}};
+  % The call and its key.
+  \node[box] (call) at (0, 0) {\texttt{nll(beta, X, y)}\\[-1pt]{\footnotesize R call}};
 
-  \node[rside, below=1.3cm of lru] (trace) {trace, transform,\\lower (in R)};
-  \node[ext, below=1.3cm of exec] (compile) {\texttt{Compile}};
+  \node[cpp, align=left, right=1.1cm of call] (key) {%
+    \textbf{cache key}\\[2pt]
+    {\footnotesize
+    \begin{tabular}{@{}l@{\quad}l@{}}
+      \textcolor{red!70!black}{\textbf{input types}} &
+        \texttt{\textcolor{red!70!black}{f64[3,1] f64[1000,3] f64[1000,1]}}\\
+      additional information & \dots
+    \end{tabular}}};
+
+  % The LRU cache: most recently used on top.
+  \node[entry, right=1.3cm of key, draw=blue!70, very thick] (e1)
+    {\dots\ f64[1000,3] f64[1000,1] \textrightarrow{} exe};
+  \node[entry, below=0.12cm of e1] (e2) {\dots\ f64[999,3]\ \ f64[999,1]\ \ \textrightarrow{} exe};
+  \node[entry, below=0.12cm of e2] (e3) {\dots\ f64[998,3]\ \ f64[998,1]\ \ \textrightarrow{} exe};
+  \node[entry, below=0.12cm of e3, draw=blue!30, fill=none, dashed, text=black!50]
+    (e4) {\ldots\ up to 100, LRU evicted};
+  \node[font=\footnotesize\bfseries, above=0.08cm of e1] (cachelab) {LRU cache of executables};
+
+  % The plugin.
+  \node[plugin, right=2cm of e1] (exec) {\texttt{Execute}};
+  \node[rcode, below=1.5cm of e4] (trace) {trace $\to$ transform $\to$ lower};
+  \node[plugin] (compile) at (exec |- trace) {\texttt{Compile}};
 
   \draw[arr] (call) -- (key);
-  \draw[arr] (key) -- (lru);
-  \draw[arr] (lru) -- node[above, lab] {hit} (exec);
-  \draw[arr] (lru) -- node[left, lab] {miss} (trace);
+  \draw[arr] (key) -- node[above, lab] {lookup} (e1);
+  \draw[arr] (e1) -- node[above, lab] {hit} (exec);
+  \draw[arr] (e4) -- node[left, lab, align=right] {miss: new shape, dtype,\\static value, \dots} (trace);
   \draw[arr] (trace) -- node[above, lab] {StableHLO} (compile);
-  \draw[arr] (compile) -- node[right, lab] {insert, run} (exec);
+  \draw[arr] (compile) -- node[right, lab, align=left] {insert,\\run} (exec);
+
+  \begin{scope}[on background layer]
+    \node[region, fill=blue!7, fit=(key) (cachelab) (e1) (e4)] (cppreg) {};
+    \node[region, fill=orange!8, fit=(trace)] (rreg) {};
+    \node[region, fill=black!6, fit=(exec) (compile)] (preg) {};
+  \end{scope}
+  \node[rlab, text=blue!60!black, anchor=south west] at (cppreg.north west)
+    {Dispatcher: a hit never enters R};
+  \node[rlab, text=orange!70!black, anchor=north west] at (rreg.south west) {anvl (R)};
+  \node[rlab, text=black!60, anchor=south east] at (preg.north east) {PJRT plugin};
 \end{tikzpicture}
 \end{document}

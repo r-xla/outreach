@@ -5,7 +5,8 @@
 #   make clean    remove rendered output and built diagrams
 
 QMD  := index.qmd
-FIGS := stack.svg pipeline.svg dispatcher.svg graph-break.svg timeline.svg frontends.svg
+FIGS := stack.svg pipeline.svg dispatcher.svg graph-break.svg timeline.svg frontends.svg \
+        tracing-ast.svg intercept-ast.svg
 
 .PHONY: all render figures clean
 
@@ -22,6 +23,9 @@ index.html: $(QMD) $(FIGS) styles.css step-numbers.html
 	pdflatex -interaction=nonstopmode -halt-on-error $< > /dev/null
 	pdf2svg $*.pdf $@
 	rm -f $*.aux $*.log $*.pdf
+
+# intercept-ast.tex draws tracing-ast.tex with another flag.
+intercept-ast.svg: tracing-ast.tex
 
 clean:
 	rm -rf index.html index_files $(FIGS)
