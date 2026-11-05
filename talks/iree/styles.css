@@ -70,3 +70,29 @@
 .hlo-dump {
   font-size: 0.7em;
 }
+
+/* Code shown in fragments that reads as one block once all are shown: each
+   later block overlaps the bottom border of the one before it, and its
+   background covers that border while it is visible. */
+.reveal .joined-code .cell,
+.reveal .joined-code .fragment {
+  margin: 0;
+}
+
+.reveal .joined-code div.sourceCode {
+  margin: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.reveal .joined-code .fragment div.sourceCode {
+  margin-top: -1px;
+  border-top: none;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.reveal .joined-code .fragment:last-child div.sourceCode {
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}

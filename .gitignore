@@ -6,13 +6,15 @@
 *.html
 *_files/
 *_cache/
+# ...except the deck's own include file
+!talks/iree/step-numbers.html
+# copied in from the clean extension on every render
+talks/*/mathjax-config.js
 
 # LaTeX build artifacts
 *.aux
 *.log
 *.dvi
-talks/openxla-stack.pdf
 
 # Typst output
-eurobioc-poster/poster.pdf
-eurobioc-poster/preview-*.png
+talks/eurobioc-poster/poster.pdf
