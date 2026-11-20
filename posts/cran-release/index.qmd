@@ -1,0 +1,244 @@
+---
+title: "{anvl} is on CRAN: An uncompromising array computing framework for R"
+date: "TODO" # YYYY-MM-DD; publish only once anvl is on CRAN; a future date auto-publishes that morning
+people:
+  - Sebastian Fischer
+  - Tomasz Kalinowski
+  - Stephane Hess
+  - Daniel Falbel
+description: >
+  {anvl} compiles R array code into fast programs for the CPU and GPU, and
+  computes exact gradients of it.
+image: "thumbnail.png" # the anvl hex logo (anvl/man/figures/logo.svg), centered on a 1920×1080 white canvas
+image-alt: "The {anvl} hex logo: a black anvil silhouette above the word anvl, inside a hexagon outline on a white background."
+topics:
+  - Machine Learning
+other_software: # no content/software/anvl page yet; move to `software:` if one is added
+  - anvl
+languages:
+  - R
+source: ai
+---
+
+<!-- Structure follows the R+AI 2026 talk (talks/r_plus_ai_2026), condensed. -->
+
+```{r}
+#| include: false
+# LOCAL ONLY, remove before submitting the post: the dev pjrt (r-xla/pjrt checkout) and the
+# released pjrt share one plugin cache and overwrite each other's CPU plugin, so the released
+# pjrt uses its own copy in <pjrt cache>/release-0.7.0/cpu.
+local({
+  plugin <- file.path(tools::R_user_dir("pjrt", "cache"), "release-0.7.0", "cpu", "libpjrt_cpu.dylib")
+  if (file.exists(plugin) && !nzchar(Sys.getenv("PJRT_PLUGIN_PATH_CPU"))) {
+    Sys.setenv(PJRT_PLUGIN_PATH_CPU = plugin)
+  }
+})
+```
+
+The R language is designed around interactive data science: You load data, manipulate it, fit models, and visualize results interactively.
+For that, the interpreted nature of the language is exactly the right approach.
+However, a large part of statistical computing also involves the development and implementation of the core numerical algorithms behind model fitting.
+To implement such algorithms efficiently, one thus has to resort to compiled, lower-level languages like C++ or Rust.
+While the algorithm then runs fast on the CPU, some computations can run orders of magnitude faster on GPUs, such as specific MCMC algorithms which are designed to exploit massive parallelism.
+In addition, many statistical algorithms involve computing derivatives, which are tedious to derive by hand.
+For small workloads, plain R on the CPU is good enough, but for large data or expensive models, compilation and GPUs can turn hours into minutes.
+
+We are happy to announce that [{anvl}](https://github.com/r-xla/anvl) is now on CRAN.
+It's core features include:
+
+1. You write R code and {anvl} compiles it for you.
+2. You can get exact derivatives of your functions with a simple call to `gradient()`.
+3. The same code runs on CPU and GPU.
+
+This way, {anvl} combines the readability of standard R code with the performance of a low-level implementation.
+If you are wondering where the name comes from: just like a real anvil is made for reshaping metal into different forms, {anvl} is made for transforming R code.
+
+To get started, install the package and its additional dependencies via `install_anvl()`.
+On Linux with an NVIDIA GPU, this also installs the CUDA libraries, so a compatible driver is all you need: there is no CUDA toolkit to install.
+On Windows, CUDA support is only available through WSL2.
+
+```{r}
+#| eval: false
+install.packages("anvl")
+anvl::install_anvl()
+```
+
+For expensive model fitting routines, the speed-ups can be large: for a mixed logit model in [apollo](https://cran.r-project.org/package=apollo), {anvl} is up to 11× faster than apollo's pure R implementation on the CPU, and up to 30× faster on the GPU.
+
+<!-- Keep consistent with the numbers in the apollo section. -->
+
+Let's dive right in to see what you can do with it.
+
+## Hello world
+
+Arrays are created from R data with `nv_array()`, with a data type and a device: the CPU by default, or `device = "cuda"` for an NVIDIA GPU.
+
+```{r}
+library(anvl)
+x <- nv_array(matrix(1:6, nrow = 2), dtype = "f32")
+x
+```
+
+Operations on arrays run immediately, so you can work with them interactively, just like in base R.
+Many R generics, such as `+`, `%*%` or `sum()`, work on arrays, and where {anvl} needs its own functions, they start with `nv_` and follow base R's naming and arguments:
+
+```{r}
+x * 2 + 1
+nv_ifelse(x > 3, x, 0)
+```
+
+Arrays are column-major like R's matrices, so flattening `x` gives the same order as `c()`:
+
+```{r}
+nv_flatten(x)
+```
+
+`jit()`, which is short for "just-in-time", compiles a function into one optimized program:
+
+```{r}
+f <- function(x) sum(x^2)
+f_jit <- jit(f)
+f_jit(x)
+```
+
+`gradient()` returns a function that computes the gradient, here `2 * x`, without deriving anything by hand:
+
+```{r}
+grad_f <- jit(gradient(f, wrt = "x"))
+grad_f(x)$x
+```
+
+That's the API in a nutshell: **arrays**, which live on a CPU or GPU and have a data type and a shape; more than 160 **functions** to compute with them, R generics plus `nv_*()` functions such as `nv_solve()`; and **transformations** like `jit()` and `gradient()`, which take an R function and return a new one.
+
+## Why {anvl}?
+
+{anvl} was initially developed by Sebastian Fischer and Daniel Falbel, the author of R's torch package, and has since grown to include various other contributors, including Tomasz Kalinowski, the author of quickr.
+The core idea dates back about two years, and although the first alpha release was already available on R-universe last year, it's exciting that {anvl} is now in a shape where we are confident to release it on CRAN.
+Building on the experience from developing R's torch package, we could translate some of the lessons learned there into the design of {anvl}.
+It also draws many ideas from [JAX](https://github.com/jax-ml/jax), and aims to play a similar role in the R ecosystem.
+However, different communities have different priorities and expectations, so with {anvl}, we are not trying to offer a version of JAX, but a framework tailored to the priorities and expectations of statistical computing: an interface that immediately feels familiar to R users, a focus on precision, e.g., in the type system and the implementation of the distribution functions, or random number generation that works like in R.
+
+R already has great packages with overlapping functionality, and there is no single best tool: they are targeted at different workloads.
+[torch](https://torch.mlverse.org) is the foundation of deep learning in R, with GPU acceleration and automatic differentiation.
+[quickr](https://github.com/t-kalinowski/quickr) is a great drop-in replacement for R code: it compiles a typed subset of R to Fortran, making existing R code fast on the CPU.
+Due to {anvl}'s backend-agnostic design, it is even possible to use quickr as a backend for {anvl} (via `local_backend("quickr")`), although this is still experimental.
+Which tools is the best for the job epends on the specific requirements and constraints of the task at hand.
+
+One core pillar of {anvl} is also the compiler we are using.
+Many tools that compile R code, such as nimble or ast2ast, translate it to a lower-level language like C++ and leave the optimization to a general-purpose compiler.
+This approach is very flexible, but a general-purpose compiler doesn't know what the array operations mean.
+{anvl} instead uses XLA from the [OpenXLA](https://openxla.org) project, a domain-specific compiler for array programs.
+Because XLA knows the semantics of the array operations, it can apply specialized optimization passes, such as fusing many operations into a single one, and it generates efficient code for both CPUs and GPUs.
+XLA is also an independent compiler that is not tied to a specific front-end: it powers JAX and TensorFlow and is used from PyTorch, Julia and Elixir, which makes it a stable and actively maintained foundation for {anvl}.
+
+We also wanted {anvl} to feel like R, while fixing some of the peculiar semantics of R's operations.
+Unlike quickr, which compiles base R code as it is, {anvl} comes with its own array library, which follows R wherever possible and deviates only for good reasons, such as consistency.
+Our goal is to document these deviations clearly in the function's help packages and the vignettes.
+For example, arrays are column-major, like R's matrices, so the mental model for indexing and memory layout remains consistent with R's conventions.
+But in base R, whether `x[, i]` drops an axis depends on how many elements `i` selects, whereas in {anvl}, it only depends on the type of the index: a scalar, as in `x[, 1]`, drops the axis, while an array, as in `x[, array(1)]`, never does.
+
+Compiling just in time, rather than ahead of time, also makes {anvl} attractive for modeling packages: it allows interfaces with great flexibility, without losing performance.
+Packages that use C++, e.g. via Rcpp, compile their code ahead of time, when the package is installed.
+Their options therefore have to be hard-coded: users pick one by name, usually with a string, and get exactly what the package author implemented.
+A user-defined specification would mean changing the C++ code, or calling back into R, which is slow.
+With a JIT compiler, users can write parts of the model themselves, as plain R functions, and they run as fast as built-in ones.
+The next example shows what this looks like for choice modeling, where the user speifies the utility functions of various options.
+
+## Example: choice modeling with apollo
+
+<!-- TEMPLATE for Stephane Hess: replace each TODO paragraph, chunk and table cell, and delete these comments when done.
+     Aim for roughly 300-500 words in total. The "Why {anvl}?" section above ends with "The next example shows what this looks like for choice modeling." -->
+
+**TODO (Stephane):** What apollo is, what it is used for, and who uses it (2-3 sentences, with a link to [apollo](https://cran.r-project.org/package=apollo)).
+
+**TODO (Stephane):** How apollo users specify a model, e.g. the utilities of a mixed logit model, as R code (1-2 sentences and a short code example).
+Ideally, show that users write their own utilities as R functions, which {anvl} compiles together with apollo's code into one fast program: this is the flexibility that "Why {anvl}?" promises right before this section.
+
+```{r}
+#| eval: false
+# TODO (Stephane): a short apollo model specification
+```
+
+**TODO (Stephane):** How apollo uses {anvl}: what gets compiled with `jit()`, how `gradient()` provides the derivatives for estimation, and what (if anything) users have to change to use it (2-4 sentences, optionally with code).
+
+```{r}
+#| eval: false
+# TODO (Stephane): how to use the anvl backend in apollo
+```
+
+**TODO (Stephane):** Results of the benchmark, with the setup (data size, number of draws, hardware), for a small and an expensive model.
+Headline numbers in the intro: up to 11× faster than apollo's pure R implementation for a mixed logit model on the CPU, and up to 30× on the GPU; please keep the results consistent with these.
+Please be honest about the small model: {anvl} can even be slower there, because of the compilation time.
+A draft to adapt:
+
+For small models, {anvl} can even be slower than apollo's pure R implementation, because compiling the model takes time.
+But where speed matters, for expensive models such as **TODO**, the speed-ups are large: **TODO**.
+{anvl} is also much faster than [RTMB](https://cran.r-project.org/package=RTMB) (**TODO: numbers**).
+This is due to the domain-specific XLA compiler that {anvl} uses (see above), which can, for example, fuse many array operations into a single one.
+
+| Model                    | apollo, pure R | apollo + RTMB | apollo + {anvl}, CPU | apollo + {anvl}, GPU |
+|--------------------------|----------------|---------------|--------------------|--------------------|
+| Small: **TODO**          | TODO           | TODO          | TODO               | TODO               |
+| Expensive: **TODO**      | TODO           | TODO          | TODO               | TODO               |
+
+<!-- Report estimation times including compilation, and, if useful, the compilation time separately.
+     RTMB row/column: adjust to how apollo actually uses RTMB (e.g. drop the column if RTMB was benchmarked outside apollo). -->
+
+
+
+**TODO (Stephane):** Status and availability: is the {anvl} backend released or in development, and where can readers find it? (1-2 sentences)
+
+<!-- For reference, the simplified multinomial logit example from the R+AI talk, which this section replaced (not executed):
+
+```r
+# In the package
+mnl_loglik <- jit(function(beta, data, utilities) {
+  V <- lapply(utilities, \(u) u(beta, data))
+  choice_loglik(V, data$choice)
+}, static = "utilities")
+
+# In the user's script
+utilities <- list(
+  car  = \(b, d) b$asc_car + b$time * d$time_car + b$cost * d$cost_car,
+  bus  = \(b, d) b$asc_bus + b$time * d$time_bus + b$cost * d$cost_bus,
+  walk = \(b, d) b$time * d$time_walk
+)
+mnl_loglik(beta, data, utilities)
+
+# Helper: log-likelihood of the observed choices, given one utility per alternative
+choice_loglik <- function(V, choice) {
+  m <- Reduce(nv_pmax, V)
+  log_denom <- m + log(Reduce(`+`, lapply(V, \(v) exp(v - m))))
+  V_chosen <- Reduce(`+`, Map(\(v, j) nv_ifelse(choice == j, v, 0), V, seq_along(V)))
+  sum(V_chosen - log_denom)
+}
+```
+
+Its point: jit() compiles the package code and the user's utilities together into one program, so a custom specification runs as fast as a built-in one and is differentiable end to end; with static = "utilities", a new specification compiles a new program. -->
+
+## What to expect
+
+Statistics needs precision, so {anvl} makes it easy to switch between speed (`f32`) and precision (`f64`), R values never lose precision when they meet an array, and the distribution functions are accurate far into the tails.
+On the CPU, {anvl} uses all cores without any configuration, and execution is asynchronous, so R keeps going while the device computes.
+{anvl} is also extensible in R: a missing function can be written from `nv_*()` functions and is compiled and differentiable like a built-in ([Adding an API Function](https://r-xla.github.io/anvl/articles/extending_api.html)), and you can even call your own C++ or CUDA code.
+
+{anvl} also has limits.
+Programs are compiled for fixed input shapes, so each new combination of shapes triggers a new compilation, which takes time (see [Static Shape Restriction](https://r-xla.github.io/anvl/articles/static_shapes.html) for more information and workarounds).
+Compiled functions must be pure: their R code only runs once, while the function is compiled, so side effects such as printing or modifying global variables don't happen on later calls.
+For the same reason, branching and looping on array values need `nv_if()` and `nv_while()` instead of `if` and `while` ([JIT Deep Dive](https://r-xla.github.io/anvl/articles/jit.html)).
+Finally, GPUs other than NVIDIA and sparse matrices aren't supported yet.
+
+## Try it out
+
+We'd love for you to try {anvl} on your own models and algorithms.
+If you want to try it out and learn more, the best place to start is the package's[Get Started article](https://r-xla.github.io/anvl/articles/anvl.html).
+
+We no longer consider {anvl} to be experimental: it is already used effectively by others, such as apollo and [garry](https://github.com/belian-earth/garry) a raster engine for remote sensing, and it is tested extensively.
+Still, many features are missing, and there are probably rough edges, so if you find one, please report it.
+There are always an inifite amount of improvements and features to add, so such feedback is invaluable for us to know what to prioritize next.
+Right now, we are focusing on extending the number of supported statistical distribution functions, without compromising speed or precision.
+
+{anvl} is a team effort: thanks to Louis Aslett, Nikolai German, Hugh Graham, Troy Hernandez, Martin Binder, Bernd Bischl and all other contributors.
+We are happy for every new contributor, be it in the form of feature requests, bug reports, or code contributions.
+
+<!-- TODO: full contributor list from GitHub, as in other Posit release posts (then maybe as its own "Acknowledgements" section) -->
