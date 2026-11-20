@@ -146,75 +146,9 @@ The next example shows what this looks like for choice modeling, where the user 
 
 ## Example: choice modeling with apollo
 
-<!-- TEMPLATE for Stephane Hess: replace each TODO paragraph, chunk and table cell, and delete these comments when done.
-     Aim for roughly 300-500 words in total. The "Why {anvl}?" section above ends with "The next example shows what this looks like for choice modeling." -->
-
-**TODO (Stephane):** What apollo is, what it is used for, and who uses it (2-3 sentences, with a link to [apollo](https://cran.r-project.org/package=apollo)).
-
-**TODO (Stephane):** How apollo users specify a model, e.g. the utilities of a mixed logit model, as R code (1-2 sentences and a short code example).
-Ideally, show that users write their own utilities as R functions, which {anvl} compiles together with apollo's code into one fast program: this is the flexibility that "Why {anvl}?" promises right before this section.
-
-```{r}
-#| eval: false
-# TODO (Stephane): a short apollo model specification
-```
-
-**TODO (Stephane):** How apollo uses {anvl}: what gets compiled with `jit()`, how `gradient()` provides the derivatives for estimation, and what (if anything) users have to change to use it (2-4 sentences, optionally with code).
-
-```{r}
-#| eval: false
-# TODO (Stephane): how to use the anvl backend in apollo
-```
-
-**TODO (Stephane):** Results of the benchmark, with the setup (data size, number of draws, hardware), for a small and an expensive model.
-Headline numbers in the intro: up to 11× faster than apollo's pure R implementation for a mixed logit model on the CPU, and up to 30× on the GPU; please keep the results consistent with these.
-Please be honest about the small model: {anvl} can even be slower there, because of the compilation time.
-A draft to adapt:
-
-For small models, {anvl} can even be slower than apollo's pure R implementation, because compiling the model takes time.
-But where speed matters, for expensive models such as **TODO**, the speed-ups are large: **TODO**.
-{anvl} is also much faster than [RTMB](https://cran.r-project.org/package=RTMB) (**TODO: numbers**).
-This is due to the domain-specific XLA compiler that {anvl} uses (see above), which can, for example, fuse many array operations into a single one.
-
-| Model                    | apollo, pure R | apollo + RTMB | apollo + {anvl}, CPU | apollo + {anvl}, GPU |
-|--------------------------|----------------|---------------|--------------------|--------------------|
-| Small: **TODO**          | TODO           | TODO          | TODO               | TODO               |
-| Expensive: **TODO**      | TODO           | TODO          | TODO               | TODO               |
-
-<!-- Report estimation times including compilation, and, if useful, the compilation time separately.
-     RTMB row/column: adjust to how apollo actually uses RTMB (e.g. drop the column if RTMB was benchmarked outside apollo). -->
-
-
-
-**TODO (Stephane):** Status and availability: is the {anvl} backend released or in development, and where can readers find it? (1-2 sentences)
-
-<!-- For reference, the simplified multinomial logit example from the R+AI talk, which this section replaced (not executed):
-
-```r
-# In the package
-mnl_loglik <- jit(function(beta, data, utilities) {
-  V <- lapply(utilities, \(u) u(beta, data))
-  choice_loglik(V, data$choice)
-}, static = "utilities")
-
-# In the user's script
-utilities <- list(
-  car  = \(b, d) b$asc_car + b$time * d$time_car + b$cost * d$cost_car,
-  bus  = \(b, d) b$asc_bus + b$time * d$time_bus + b$cost * d$cost_bus,
-  walk = \(b, d) b$time * d$time_walk
-)
-mnl_loglik(beta, data, utilities)
-
-# Helper: log-likelihood of the observed choices, given one utility per alternative
-choice_loglik <- function(V, choice) {
-  m <- Reduce(nv_pmax, V)
-  log_denom <- m + log(Reduce(`+`, lapply(V, \(v) exp(v - m))))
-  V_chosen <- Reduce(`+`, Map(\(v, j) nv_ifelse(choice == j, v, 0), V, seq_along(V)))
-  sum(V_chosen - log_denom)
-}
-```
-
-Its point: jit() compiles the package code and the user's utilities together into one program, so a custom specification runs as fast as a built-in one and is differentiable end to end; with static = "utilities", a new specification compiles a new program. -->
+TODO: Describe what aopollo is, how it it works, how it uses anvl and some perf benchmarks (ideally focusing on expensive workloads to demonstrate the strengths).
+I think it's a great example for demonstrating the kind of flexibility JIT compilation brings for modelign packages, so it would be great to demonstrate that.
+I think we should also mention RTMB as this shows that using a domain-specific compiler is better than just transpiling.
 
 ## What to expect
 
